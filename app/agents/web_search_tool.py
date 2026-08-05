@@ -109,6 +109,8 @@ def fetch_web_image_for_query(query: str) -> str | None:
         slug = re.sub(r"[^\w]", "_", query.lower()).strip("_")[:40]
 
         for idx, img_url in enumerate(image_urls[:3]):
+            if not isinstance(img_url, str) or not img_url.startswith(("http://", "https://")):
+                continue
             try:
                 img_resp = requests.get(img_url, headers=headers, timeout=6.0)
                 if img_resp.status_code == 200 and len(img_resp.content) > 5000:

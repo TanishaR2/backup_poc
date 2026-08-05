@@ -8,6 +8,8 @@ from app.generation.generation_service import qna
 from utils.logger_config import logger
 from utils.settings import COLLECTION_NAME
 
+from scripts.run_500_query_benchmark import run_benchmark
+from scripts.test_10_queries import main
 project_root = Path(__file__).resolve().parent
 
 input_dir = project_root / "data" / "pdf"
@@ -47,10 +49,13 @@ def run_rag_pipeline(query: str) -> dict:
 
 
 if __name__ == "__main__":
-    logger.info("Starting document extraction...")
-    run_extraction(str(input_dir), str(output_dir))
-    logger.success("Extraction completed successfully.")
+    # logger.info("Starting document extraction...")
+    # run_extraction(str(input_dir), str(output_dir))
+    # logger.success("Extraction completed successfully.")
 
-    logger.info("Starting vector ingestion into Qdrant...")
-    run_ingestion(str(output_dir), force=False)
-    logger.success("Ingestion completed successfully.")
+    # logger.info("Starting vector ingestion into Qdrant...")
+    # run_ingestion(str(output_dir), force=False)
+    # logger.success("Ingestion completed successfully.")
+
+    # run_benchmark()
+    main()

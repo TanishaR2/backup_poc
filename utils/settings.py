@@ -43,16 +43,11 @@ AZURE_OPENAI_5_4_KEY_ENV = (
     else "AZURE_OPENAI_API_KEY_5_4"
 )
 
-
-BLOB_STORAGE_ACCOUNT_NAME = os.getenv("BLOB_STORAGE_ACCOUNT_NAME")
-BLOB_KEY = os.getenv("BLOB_KEY")
-BLOB_CONNECTION_STRING = os.getenv("BLOB_CONNECTION_STRING")
-
 # --- GENERAL CONFIG ---
 COLLECTION_NAME = "InsightDocs"
 COHERE_EMBEDDING_MODEL = "rerank-v3.5"
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
-RERANKER_NEEDED = True
+RERANKER_NEEDED = False
 vlm_provider = "azure_openai"
 
 # Minimal routing and confidence thresholds

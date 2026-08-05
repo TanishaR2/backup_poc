@@ -205,17 +205,15 @@ def run_query(query: str, image_base64: str = None, session_id: str = "default")
         retrieval_confidence = None
 
     # Prefer any image path explicitly set by the agent.
-    retrieved_image_path = result.get("retrieved_image_path")
-    if retrieved_image_path and not Path(retrieved_image_path).exists():
-        retrieved_image_path = None
+    from app.generation.query_utils import resolve_existing_image_path
+    retrieved_image_path = resolve_existing_image_path(result.get("retrieved_image_path"))
 
     # Fallback image acquisition if not already set and image is needed (and no image attached)
     effective_query = (result.get("query") or query).strip()
     if not retrieved_image_path and not image_base64 and effective_query and (needs_image is True or should_request_image(effective_query)):
         if route == "rag" and raw_chunks:
             retrieved_image_path = select_relevant_image_path(effective_query, raw_chunks, needs_image=needs_image)
-
-        if not retrieved_image_path:
+        elif route == "support":
             from app.agents.web_search_tool import fetch_web_image_for_query
             from app.generation.query_utils import generate_support_diagram_image
 

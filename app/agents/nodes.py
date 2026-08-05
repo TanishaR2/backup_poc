@@ -26,24 +26,11 @@ def planner_node(state: AgentState) -> dict:
 
     normalized = normalize_query_text(query)
 
-    # Check project FAQ match first for InSightDocs system/project questions (only if no image)
-    if not image_b64:
-        from app.agents.faq_agent import find_faq_match
-        faq_match = find_faq_match(normalized, threshold=0.82)
-        if faq_match:
-            logger.info(f"[Planner Node] Query matched project FAQ: '{faq_match['question']}'")
-            return {
-                "route": "faq",
-                "is_atomic": True,
-                "query": normalized,
-                "faq_answer": faq_match["answer"],
-                "domain": "project_faq",
-            }
-
     chat_hist = state.get("chat_history", [])
     result = route_query(normalized, chat_history=chat_hist, has_image=bool(image_b64))
 
     route = result["route"]
+    scope = result.get("scope", "documents")
     is_atomic = result.get("is_atomic", True)
     rewritten = result.get("rewritten_query", query.strip())
 
@@ -74,10 +61,11 @@ def planner_node(state: AgentState) -> dict:
             logger.info("[Planner Node] LLM rewrite requested image but image already provided — using original query")
             rewritten = query.strip()
 
-    logger.success(f"[Planner Node] Route: '{route}' | Rewritten Query: '{rewritten}' | Atomic: {is_atomic}")
+    logger.success(f"[Planner Node] Route: '{route}' | Scope: '{scope}' | Rewritten Query: '{rewritten}' | Atomic: {is_atomic}")
 
     ret = {
         "route": route,
+        "scope": scope,
         "is_atomic": is_atomic,
         "query": rewritten,
         "answer_length": result.get("answer_length", "medium"),
@@ -87,55 +75,26 @@ def planner_node(state: AgentState) -> dict:
         "answer": "",
         "final_answer": "",
     }
-    if "faq_answer" in result and route == "faq":
-        ret["faq_answer"] = result["faq_answer"]
     ret["domain"] = result.get("domain", "ai_ml_technical")
     if image_b64:
         ret["needs_image_in_answer"] = True
     elif "needs_image" in result:
         ret["needs_image_in_answer"] = bool(result["needs_image"])
     else:
-        ret["needs_image_in_answer"] = should_request_image(rewritten)
+        ret["needs_image_in_answer"] = False
     return ret
 
 
 def faq_node(state: AgentState) -> dict:
-    """Serve sub-millisecond answer from Semantic FAQ Cache."""
-    query = state["query"]
-    logger.info(f"[FAQ Node] Serving instant cached answer for query: '{query[:60]}...'")
-
-    answer = state.get("faq_answer", "")
-    if not answer:
-        from app.agents.faq_agent import find_faq_match
-        match = find_faq_match(query, threshold=0.90)
-        if match:
-            answer = match["answer"]
-        else:
-            answer = "InSightDocs supports multimodal document intelligence over technical research papers."
-
-    logger.success(f"[FAQ Node] Instant answer served: '{answer[:60]}...'")
-
-    updated_history = list(state.get("chat_history", [])) + [
-        {"role": "user", "content": query},
-        {"role": "assistant", "content": answer},
-    ]
-
-    result = {
-        "final_answer": answer,
-        "chat_history": updated_history,
-    }
-    if state.get("needs_image_in_answer") and state.get("image_base64"):
-        result["image_base64"] = state.get("image_base64")
-        if state.get("image_description"):
-            result["image_description"] = state.get("image_description")
-
-    return result
+    """Legacy FAQ node stub (Routing now uses unified Qdrant retrieval via retrieval_node)."""
+    return planner_node(state)
 
 
 def retrieval_node(state: AgentState) -> dict:
     """Fetch relevant document chunks from Qdrant using hybrid search and reranking (+ parallel web search if flagged)."""
     query = state["query"]
-    logger.info(f"[Retrieval Node] Fetching chunks for query: '{query}'")
+    scope = state.get("scope", "documents")
+    logger.info(f"[Retrieval Node] Fetching chunks for query: '{query}' | Scope: '{scope}'")
 
     web_snippets = []
     if state.get("needs_web_search"):
@@ -143,34 +102,61 @@ def retrieval_node(state: AgentState) -> dict:
         from concurrent.futures import ThreadPoolExecutor
         from app.agents.web_search_tool import search_web
         with ThreadPoolExecutor() as executor:
-            future_qdrant = executor.submit(retrieve, query)
+            future_qdrant = executor.submit(retrieve, query, scope=scope)
             future_web = executor.submit(search_web, query)
             hits, analysis = future_qdrant.result()
             web_snippets = future_web.result()
     else:
-        hits, analysis = retrieve(query)
+        hits, analysis = retrieve(query, scope=scope)
 
     confidence = compute_retrieval_confidence(hits)
 
-    logger.success(f"[Retrieval Node] Retrieved {len(hits)} chunks | Web snippets: {len(web_snippets)} | Confidence: {confidence:.2f}")
+    needs_img = bool(state.get("needs_image_in_answer")) or any(
+        w in query.lower() for w in ["figure", "diagram", "image", "illustration", "architecture", "plot", "schematic", "page"]
+    )
+    selected_img_path = None
+    if needs_img:
+        from app.generation.query_utils import select_relevant_image_path
+        selected_img_path = select_relevant_image_path(query=query, hits=hits, needs_image=True)
+        if selected_img_path:
+            logger.info(f"[Retrieval Node] Selected image path: '{selected_img_path}'")
+
+    logger.success(f"[Retrieval Node] Retrieved {len(hits)} chunks | Scope: '{scope}' | Web snippets: {len(web_snippets)} | Confidence: {confidence:.2f} | Image: {selected_img_path}")
     return {
         "retrieved_docs": hits,
         "retrieval_confidence": confidence,
         "web_snippets": web_snippets,
+        "retrieved_image_path": selected_img_path,
     }
 
 
 def generation_node(state: AgentState) -> dict:
     """Call LLM provider loop to generate answer from retrieved chunks."""
+    import base64
+    from pathlib import Path as _Path
+
     query = state["query"]
     answer_length = state.get("answer_length", "medium")
     logger.info(f"[Generation Node] Generating answer for query: '{query}' | length='{answer_length}'")
+
+    # Use user-uploaded image first; fall back to retrieved RAG image so the
+    # LLM can actually see (and describe) the retrieved figure.
+    image_b64 = state.get("image_base64")
+    if not image_b64:
+        from app.generation.query_utils import resolve_existing_image_path
+        rag_img_path = resolve_existing_image_path(state.get("retrieved_image_path"))
+        if rag_img_path:
+            try:
+                image_b64 = base64.b64encode(_Path(rag_img_path).read_bytes()).decode("utf-8")
+                logger.info(f"[Generation Node] Loaded retrieved RAG image as base64: {rag_img_path}")
+            except Exception as _e:
+                logger.warning(f"[Generation Node] Could not encode retrieved image: {_e}")
 
     answer = generate_answer(
         query=query,
         hits=state.get("retrieved_docs", []),
         chat_history=state.get("chat_history", []),
-        image_base64=state.get("image_base64"),
+        image_base64=image_b64,
         web_snippets=state.get("web_snippets"),
         answer_length=answer_length,
     )
@@ -220,22 +206,28 @@ def support_node(state: AgentState) -> dict:
         image_base64=state.get("image_base64"),
         needs_image=state.get("needs_image_in_answer"),
         answer_length=state.get("answer_length", "medium"),
+        retrieved_docs=state.get("retrieved_docs", []),
     )
 
     answer = result.get("answer", "")
     source = result.get("source", "unknown")
+    img_path = result.get("retrieved_image_path")
     logger.success(f"[Support Node] Answered via '{source}': '{answer[:60]}...'")
+
+    assistant_msg = {"role": "assistant", "content": answer}
+    if img_path:
+        assistant_msg["image_path"] = img_path
 
     updated_history = list(state.get("chat_history", [])) + [
         {"role": "user", "content": query},
-        {"role": "assistant", "content": answer},
+        assistant_msg,
     ]
 
     ret = {
         "final_answer": answer,
         "chat_history": updated_history,
         "route": "support",
-        "retrieved_image_path": result.get("retrieved_image_path"),
+        "retrieved_image_path": img_path,
     }
     return ret
 
@@ -250,9 +242,13 @@ def final_node(state: AgentState) -> dict:
 
     logger.success(f"[Final Node] Answer finalized: '{clean_answer[:60]}...'")
 
+    assistant_msg = {"role": "assistant", "content": clean_answer}
+    if state.get("retrieved_image_path"):
+        assistant_msg["image_path"] = state.get("retrieved_image_path")
+
     updated_history = list(state.get("chat_history", [])) + [
         {"role": "user", "content": state["query"]},
-        {"role": "assistant", "content": clean_answer},
+        assistant_msg,
     ]
 
     return {

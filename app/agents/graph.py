@@ -62,7 +62,7 @@ def build_graph(checkpointer=None) -> object:
         {
             "rag": "retrieval",
             "support": "support",
-            "faq": "faq",
+            "faq": "retrieval",
         },
     )
 

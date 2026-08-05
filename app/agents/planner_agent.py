@@ -4,7 +4,6 @@ import json
 import re
 from typing import Any
 
-from app.generation.query_utils import should_request_image
 from utils.logger_config import logger
 
 
@@ -33,29 +32,34 @@ def route_query(
     """Route user query and perform LLM-based query correction, contextual expansion, and length estimation."""
     logger.info(f"[Planner Agent] Processing query: '{query}' (has_image={has_image})")
 
-    visual_request = (not has_image) and bool(should_request_image(query))
-
     if llm_response:
         parsed = _extract_json(llm_response)
         if parsed and parsed.get("route") in {"rag", "support", "faq"}:
+            raw_route = str(parsed.get("route", "rag")).lower()
+            raw_scope = str(parsed.get("scope", "documents")).lower()
+            raw_domain = str(parsed.get("domain", "")).lower()
+            scope = "faq" if (raw_scope == "faq" or raw_route == "faq" or raw_domain == "project_faq") else "documents"
+            route = "support" if raw_route == "support" else "rag"
             return {
-                "route": "rag" if visual_request else parsed["route"],
-                "needs_image": True if visual_request else parsed.get("needs_image", False),
-                "needs_web_search": parsed.get("needs_web_search", False),
-                "is_atomic": parsed.get("is_atomic", True),
+                "route": route,
+                "scope": scope,
+                "needs_image": bool(parsed.get("needs_image", False)),
+                "needs_web_search": bool(parsed.get("needs_web_search", False)),
+                "is_atomic": bool(parsed.get("is_atomic", True)),
                 "domain": parsed.get("domain", "ai_ml_technical"),
                 "rewritten_query": parsed.get("rewritten_query", query.strip()),
-                "answer_length": "short" if visual_request else parsed.get("answer_length", "medium"),
+                "answer_length": parsed.get("answer_length", "medium"),
                 "reason": parsed.get("reason", "mock response"),
             }
 
-    # Format recent conversation history (last 2 pairs / 4 messages)
+    # Format extended conversation history (last 5 pairs / 10 messages)
     history_lines = []
     if chat_history:
-        for msg in chat_history[-4:]:
+        for msg in chat_history[-10:]:
             role = msg.get("role", "user").upper()
-            content = msg.get("content", "")[:250]
-            history_lines.append(f"{role}: {content}")
+            content = str(msg.get("content", ""))[:300]
+            img_info = f" [Attached Image: {msg.get('image_path')}]" if msg.get("image_path") else ""
+            history_lines.append(f"{role}{img_info}: {content}")
     history_str = "\n".join(history_lines) if history_lines else "None"
 
     image_context_prompt = ""
@@ -80,36 +84,36 @@ def route_query(
 
     if text:
         parsed = _extract_json(text)
-        if parsed and parsed.get("route") in {"rag", "support"}:
-            route = parsed["route"]
+        if parsed and parsed.get("route") in {"rag", "support", "faq"}:
+            raw_route = str(parsed.get("route", "rag")).lower()
+            raw_scope = str(parsed.get("scope", "documents")).lower()
+            raw_domain = str(parsed.get("domain", "")).lower()
+
+            scope = "faq" if (raw_scope == "faq" or raw_route == "faq" or raw_domain == "project_faq") else "documents"
+            route = "support" if raw_route == "support" else "rag"
+
             needs_img = bool(parsed.get("needs_image", False))
             needs_web = bool(parsed.get("needs_web_search", False))
             is_atomic = bool(parsed.get("is_atomic", True))
             domain = parsed.get("domain", "ai_ml_technical")
             rewritten_q = parsed.get("rewritten_query", query.strip()) or query.strip()
+            
             if has_image and (not query.strip() or len(query.strip()) < 5):
                 rewritten_q = "Describe and analyze the attached image in detail."
-            else:
-                # Clean leading chatter if present in rewritten_query
-                chatter_pat = r"^(hi|hello|hey|greetings|please|you forgot to give me|can you|could you|please give me|show me|give me|return)\b[\s,]*"
-                rewritten_q = re.sub(chatter_pat, "", rewritten_q, flags=re.IGNORECASE).strip()
-                rewritten_q = re.sub(r"^(please|give me|show me|return|fetch|get)\b[\s,]*", "", rewritten_q, flags=re.IGNORECASE).strip() or query.strip()
+
             answer_length = parsed.get("answer_length", "medium")
             if answer_length not in {"short", "medium", "detailed"}:
                 answer_length = "medium"
 
             logger.success(
-                f"[Planner Agent] LLM Decision: route='{route}', needs_image={needs_img}, "
+                f"[Planner Agent] LLM Decision: route='{route}', scope='{scope}', needs_image={needs_img}, "
                 f"needs_web={needs_web}, atomic={is_atomic}, domain='{domain}', length='{answer_length}' | "
                 f"Rewritten: '{rewritten_q}' | Reason: {parsed.get('reason', '')}"
             )
-            if visual_request:
-                route = "rag"
-                needs_img = True
-                answer_length = "short"
 
             return {
                 "route": route,
+                "scope": scope,
                 "needs_image": needs_img,
                 "needs_web_search": needs_web,
                 "is_atomic": is_atomic,
@@ -122,35 +126,21 @@ def route_query(
     # Fallback if LLM fails
     lowered = query.lower()
     is_greeting = any(w in lowered for w in ["hello", "hi", "hey", "who are you"])
-    is_visual = bool(should_request_image(query))
-    is_web = any(
-        kw in lowered
-        for kw in [
-            "sota",
-            "latest",
-            "recent",
-            "release",
-            "released",
-            "announced",
-            "benchmark",
-            "2025",
-            "2026",
-            "anthropic",
-            "claude",
-        ]
-    )
+    is_faq = any(kw in lowered for kw in ["faq", "insightdocs", "vector db", "how to use", "supported formats"])
+    is_web = any(kw in lowered for kw in ["sota", "latest", "recent", "release", "2025", "2026"])
     is_atomic_fb = (lowered.count("?") <= 1)
-    # Fallback length heuristic based on query word count
     word_count = len(query.split())
-    answer_length_fb = "short" if is_visual or word_count <= 5 else "detailed" if word_count > 15 else "medium"
+    answer_length_fb = "short" if word_count <= 5 else "detailed" if word_count > 15 else "medium"
 
     route_fb = "support" if is_greeting else "rag"
-    domain_fb = "greeting" if is_greeting else "ai_ml_technical"
+    scope_fb = "faq" if is_faq else "documents"
+    domain_fb = "greeting" if is_greeting else "project_faq" if is_faq else "ai_ml_technical"
 
-    logger.success(f"[Planner Agent] Fallback Decision: route='{route_fb}', needs_image={is_visual}, length='{answer_length_fb}'")
+    logger.success(f"[Planner Agent] Fallback Decision: route='{route_fb}', scope='{scope_fb}', length='{answer_length_fb}'")
     return {
         "route": route_fb,
-        "needs_image": is_visual,
+        "scope": scope_fb,
+        "needs_image": False,
         "needs_web_search": is_web,
         "is_atomic": is_atomic_fb,
         "domain": domain_fb,

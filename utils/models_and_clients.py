@@ -185,7 +185,7 @@ def run_llm_completion(
                 else:
                     messages = [{"role": "user", "content": prompt}]
 
-                params = {"model": model, "messages": messages}
+                params = {"model": model, "messages": messages, "timeout": 30.0}
                 if max_tokens:
                     params["max_tokens"] = max_tokens
                 if temperature is not None:

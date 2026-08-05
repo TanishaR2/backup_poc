@@ -47,6 +47,7 @@ def answer_support_query(
     image_base64: str | None = None,
     needs_image: bool | None = None,
     answer_length: str = "medium",
+    retrieved_docs: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Answer support, greeting, or out-of-domain queries with strict boundary enforcement and multimodal vision capabilities."""
     logger.info(f"[Support Agent] Input query: '{query}' (image_attached={bool(image_base64)})")
@@ -69,10 +70,41 @@ def answer_support_query(
 
     from prompts.prompts import Support_image_instruction, Support_text_instruction
 
+    # Check if query references a specific arXiv paper ID (e.g. 2606.15207) directly from retrieved_docs
+    arxiv_match = re.search(r"\b(\d{4}\.\d{4,5})\b", query)
+    paper_context_note = ""
+    if arxiv_match:
+        target_arxiv_id = arxiv_match.group(1)
+        found_doc_id = None
+        if retrieved_docs:
+            for doc in retrieved_docs:
+                if isinstance(doc, dict):
+                    meta = doc.get("metadata", {}) or doc.get("payload", {}).get("metadata", {}) or {}
+                else:
+                    meta = (getattr(doc, "payload", {}) or {}).get("metadata", {}) or {}
+                doc_id = str(meta.get("doc_id") or meta.get("document_name") or "")
+                if target_arxiv_id in doc_id:
+                    found_doc_id = doc_id
+                    break
+
+        if found_doc_id:
+            clean_title = found_doc_id.replace("_", " ")
+            paper_context_note = (
+                f"\n\nNOTE: The research paper '{clean_title}' (arXiv ID: {target_arxiv_id}) IS INDEXED in the system database. "
+                f"However, the requested figure or page image was not found on that specific page in the paper. "
+                f"Do NOT say 'the paper is not indexed'. Instead, politely state that paper '{clean_title}' is indexed in the system, "
+                f"but does not contain that figure on that page, and ask if the user would like details about the paper's methodology or available figures.\n"
+            )
+        else:
+            paper_context_note = (
+                f"\n\nNOTE: The research paper (arXiv ID: {target_arxiv_id}) is NOT currently indexed in the vector database. "
+                f"Politely clarify that paper {target_arxiv_id} is not indexed and answer based on general AI/ML parametric knowledge.\n"
+            )
+
     if image_base64:
-        prompt = Support_image_instruction + "\n"
+        prompt = Support_image_instruction + paper_context_note + "\n"
     else:
-        prompt = Support_text_instruction + "\n"
+        prompt = Support_text_instruction + paper_context_note + "\n"
 
     if answer_length == "short":
         prompt += (

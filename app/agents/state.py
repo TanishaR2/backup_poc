@@ -18,4 +18,5 @@ class AgentState(TypedDict):
     needs_image_in_answer: Optional[bool]
     image_description: Optional[str]
     answer_length: Optional[str]  # 'short' | 'medium' | 'detailed'
+    scope: Optional[str]  # 'documents' | 'faq'
     retrieved_image_path: Optional[str]

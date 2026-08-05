@@ -11,7 +11,7 @@ from pathlib import Path
 
 from app.generation.query_utils import select_relevant_image_path
 from utils.settings import RETRIEVAL_CONFIDENCE_THRESHOLD, VALIDATION_CONFIDENCE_THRESHOLD
-FASTAPI_URL = os.getenv("FASTAPI_URL1", "http://127.0.0.1:8007")
+FASTAPI_URL = os.getenv("FASTAPI_URL1", "http://127.0.0.1:8003")
 
 # Auto-probe active FastAPI port (fallback to port 8000 if 8004 is unreachable)
 try:
@@ -331,7 +331,7 @@ for i, msg in enumerate(st.session_state.messages):
 # Chat Input Form
 with st.form("chat_form", clear_on_submit=True):
     user_query = st.text_input("Ask a question about the uploaded documents:", placeholder="e.g., What is the main contribution of VANDERER?")
-    uploaded_image = st.file_uploader("Attach an image to query about (optional):", type=["png", "jpg", "jpeg"])
+    uploaded_image = st.file_uploader("Attach a PDF or image file to query about (optional):", type=["pdf", "png", "jpg", "jpeg"])
     submit_button = st.form_submit_button("Send Query")
 
     if submit_button and (user_query.strip() or uploaded_image):

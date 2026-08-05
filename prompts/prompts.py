@@ -98,11 +98,19 @@ Requirements:
 - Use higher-ranked chunks as primary evidence, but include lower-ranked chunks whenever they provide additional relevant information.
 - If multiple retrieved chunks contain overlapping information, merge them without repetition.
 - If retrieved evidence conflicts, report only information consistently supported across the retrieved context.
-- If an image description is present in the retrieved context, your answer MUST strictly describe and ground itself in the actual visible components, modules, labels, and flow reported in that retrieved image description.
-- DO NOT invent or hallucinate textbook labels (e.g. Q/K/V, standard RNN x_t, h_t) if they do not appear in the retrieved figure context. If the retrieved figure shows a specialized variant or paper architecture (e.g. CDAT block, pruning cycle), describe what is actually present in that figure.
+- If an image description or image is present, your answer MUST strictly describe and ground itself in the actual visible components, modules, labels, and flow reported.
+- DO NOT invent or hallucinate textbook labels if they do not appear in the retrieved figure context. Describe what is actually present in the figure.
+- TONE & PROFESSIONALISM: Always maintain a humble, polite, respectful, and professional tone.
+- WHEN AN IMAGE IS ATTACHED / PROVIDED: Your answer MUST directly describe and explain the attached figure to satisfy the user's request. NEVER output "Figure N is not located" or "The information is not available" when a figure image is attached.
+- FIGURE & PAGE GUIDANCE (WHEN NO IMAGE IS ATTACHED):
+  * If NO image is attached, and the user requests a specific Figure N on Page P (e.g. 'Figure 3 on page 3') and Figure N is NOT on Page P in the retrieved context:
+    1. Politely state that Figure N is not located on Page P in the retrieved text context, and specify which page Figure N appears on if known from the context.
+    2. List and summarize all figures available for this paper across the retrieved chunks (e.g. Figure 1 on Page 2) so the user receives helpful visual context.
+    3. In a humble and helpful closing, politely invite the user to request the figure by its correct page number, figure title, or technical topic context.
+- When an image is attached or present, describe the visual content directly to satisfy the request. DO NOT output "The information is not available in the retrieved context." when an image is provided.
 - Do NOT include any Source Paths, Description Paths, or file system paths in the answer text.
 - Do NOT include citations or chunk IDs as text inside the answer field. Use the citations array for that.
-- If the answer is not available in the retrieved context, return exactly:
+- If the answer is not available at all in the retrieved context and no image is attached, return exactly:
 
 "The information is not available in the retrieved context."
 
@@ -247,26 +255,32 @@ Analyze the user query and prior conversation history to perform classification 
 YOUR TASKS:
 1. 'rewritten_query':
    - Fix obvious spelling or grammar typos in standard words or AI terms (e.g. 'archtecture' -> 'architecture', 'ppooling' -> 'pooling').
-   - STRIP conversational chatter, greetings, polite requests, and filler phrases (e.g. 'hi, please give me', 'you forgot to give me', 'can you show me') so that 'rewritten_query' is a clean, focused, self-contained search query (e.g., 'CNN architecture diagram showing pooling layers').
+   - STRIP conversational chatter, greetings, polite requests, and filler phrases (e.g. 'hi, please give me', 'you forgot to give me', 'can you show me') so that 'rewritten_query' is a clean, focused, self-contained search query.
+   - CONTEXT EXPANSION & COREFERENCE RESOLUTION: Inspect 'Prior Conversation History'. If the user query uses ambiguous pronouns or references (e.g. 'the paper', 'it', 'above image', 'tell the abstract then'), YOU MUST replace them with explicit paper titles, model names, or figure subjects mentioned earlier in the conversation history (e.g., rewrite 'tell abstract of paper then' to 'ExtractBench paper abstract').
    - NEVER set rewritten_query to 'Please upload an image' or similar statements when an image is attached.
 
 2. 'route':
    - 'support': Greetings, casual chat, non-technical/out-of-domain questions, OR when the user attaches an external image file to analyze.
-   - 'rag': Specific technical questions about AI, Machine Learning, Deep Learning paper equations, architectures, diagrams, figures, or experiments in research papers.
-3. 'needs_image':
-   - true: ONLY if the user explicitly asks to SEE, DISPLAY, SHOW, ILLUSTRATE, or VISUALIZE a diagram/figure/chart/plot.
-   - false: If the user asks a pure text question, mathematical explanation, or references a figure for text explanation.
-4. 'needs_web_search':
+   - 'rag': Technical research paper questions OR InSightDocs system FAQ inquiries.
+3. 'scope':
+   - 'faq': Questions about InSightDocs system capabilities, architecture, vector DB, supported file formats, CLI commands, or FAQs.
+   - 'documents': Specific technical questions about research papers, algorithms, equations, diagrams, or experiments.
+4. 'needs_image':
+   - Analyze the SEMANTIC MEANING and INTENT of the query rather than relying on keyword matching.
+   - true: Set to true ONLY when the user's underlying intent is to view, inspect, or see a visual diagram, figure, structural architecture schematic, flowchart, chart, or visual plot.
+   - false: Set to false for text explanations, conceptual definitions, numerical data extractions, accuracy numbers, evaluation tables, metric comparisons, or general queries.
+5. 'needs_web_search':
    - true: If the query asks for live 2025/2026 news, state-of-the-art (SOTA) web benchmarks, product release updates, or newly launched model announcements.
    - false: For standard research paper inquiries.
-5. 'is_atomic':
+6. 'is_atomic':
    - true: If the query is a single focused question.
    - false: If the query packs multiple unrelated questions into one.
-6. 'domain':
+7. 'domain':
    - 'ai_ml_technical': For AI/ML/DL technical topics.
    - 'greeting': For greetings or identity questions ('hello', 'who are you').
+   - 'project_faq': For InSightDocs system architecture, features, or capability questions.
    - 'out_of_domain': For completely non-technical questions (sports, cooking, general knowledge).
-7. 'answer_length': Determine the appropriate response length based on the user's intent:
+8. 'answer_length': Determine the appropriate response length based on the user's intent:
    - 'short': Quick factual lookups, yes/no questions, single-value retrieval (e.g. 'What is the accuracy?', 'What year was this published?').
    - 'medium': Concept explanations, definitions, or when a specific count is mentioned (e.g. 'explain in 3 points', 'summarize the method').
    - 'detailed': Deep dives, methodology analysis, experimental breakdowns, multi-step explanations, or when user asks for many points (e.g. 'explain in 7 points', 'walk me through the full architecture').
@@ -279,6 +293,7 @@ Current User Query: {query}
 Respond ONLY with valid JSON in this exact structure:
 {{
   "route": "rag",
+  "scope": "documents",
   "needs_image": false,
   "needs_web_search": false,
   "is_atomic": true,
@@ -298,6 +313,9 @@ Instructions:
 2. Provide a clear, precise, and well-structured technical answer:
    - Answer the core concept directly using clean bullet points and Markdown formatting.
    - Use clean LaTeX notation for mathematical equations (e.g., $h_t = \\tanh(W_x x_t + W_h h_{t-1} + b)$).
+   - If answering a research paper question when vector context was empty or not indexed, politely clarify:
+     'Note: The requested paper is not currently indexed in the vector database. Providing answer based on general AI/ML parametric knowledge.'
+   - If the user explicitly asks for exact verbatim text or abstract (e.g., 'not ELI5'), provide the technical abstract directly without summarizing into ELI5 style.
    - NEVER output raw SVG XML code (`<svg>...</svg>`), HTML tags, or ASCII box art.
    - NEVER output Python code blocks unless the user explicitly requested code.
 

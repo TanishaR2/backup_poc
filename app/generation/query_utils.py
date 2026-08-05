@@ -13,6 +13,23 @@ def normalize_query_text(query: str) -> str:
     return normalized.strip()
 
 
+def resolve_existing_image_path(path_str: str | None) -> str | None:
+    """Resolve an image file path safely against local workspace disk."""
+    if not path_str:
+        return None
+    p = Path(path_str)
+    if p.is_file():
+        return str(p)
+
+    if "data/output/" in path_str:
+        rel_part = path_str.split("data/output/", 1)[1]
+        local_cand = Path(__file__).resolve().parents[2] / "data" / "output" / rel_part
+        if local_cand.is_file():
+            return str(local_cand)
+
+    return None
+
+
 def compute_retrieval_confidence(hits: Iterable[Any]) -> float:
     """Compute retrieval confidence as the average score of top 2 hits."""
     scores = []
@@ -40,159 +57,154 @@ def compute_retrieval_confidence(hits: Iterable[Any]) -> float:
 
 
 def should_request_image(query: str) -> bool:
-    """Return True if the query explicitly asks to view/display/show a visual diagram or figure."""
-    if not query or not query.strip():
-        return False
-
-    lowered = re.sub(r"[^a-z0-9\s]", " ", query.lower()).strip()
-    if not lowered:
-        return False
-
-    visual_patterns = [
-        r"\b(show|give|display|provide|render|draw|illustrate|visualize|view)\b.*?\b(image|figure|fig|diagram|chart|plot|picture|architecture|cell|model|structure)\b",
-        r"\b(image|figure|fig|diagram|chart|plot|picture|architecture|cell|model|structure)\b.*?\b(of|showing|displaying|for)\b",
-    ]
-    for pattern in visual_patterns:
-        if re.search(pattern, lowered):
-            return True
-
-    visual_keywords = {"image", "figure", "fig", "diagram", "chart", "plot", "picture", "photo", "architecture", "visualize", "visualization"}
-    words = set(lowered.split())
-    if words & visual_keywords:
-        return True
-
+    """[DEPRECATED] Always return False to rely on Planner LLM's semantic needs_image decision."""
     return False
 
 
-def _extract_hit_context(hit: Any) -> tuple[str, dict[str, Any]]:
+def _extract_hit_context(hit: Any) -> tuple[str, dict]:
+    """Extract text content and metadata dict safely from a Qdrant hit object or dictionary."""
     if isinstance(hit, dict):
         payload = hit.get("payload", {}) or {}
-        text = payload.get("text", "") or hit.get("text", "") or ""
+        text = payload.get("text", "") or ""
         metadata = payload.get("metadata", {}) or {}
         return text, metadata
-
-    payload = getattr(hit, "payload", {}) or {}
-    metadata = payload.get("metadata", {}) or {}
-    return payload.get("text", "") or "", metadata
+    else:
+        payload = getattr(hit, "payload", {}) or {}
+        text = payload.get("text", "") or ""
+        metadata = payload.get("metadata", {}) or {}
+        return text, metadata
 
 
 def select_relevant_image_path(query: str, hits: Iterable[Any], needs_image: bool | None = None) -> str | None:
     """Select the most relevant image path for the query.
-    
-    1. Collects image candidates directly from retrieved hits or Qdrant points.
-    2. Matches candidate text/description keywords against query terms.
-    3. Returns the matching image source_path if available and valid.
+
+    Strategy (minimal — mirrors web-search image flow):
+      A. If arXiv ID found in query → targeted Qdrant scroll for that doc's image chunks.
+         Score: page_match +100, wrong_page -10, figure_match +50.
+         Returns None when score ≤ 0 (page/figure doesn't exist in doc).
+      B. Fallback: keyword overlap over hits (for queries without a paper ID).
     """
     if not query or not query.strip():
         return None
-    if needs_image is False:
-        return None
-    if needs_image is not True and not should_request_image(query):
+    if needs_image is not True:
         return None
 
-    # Standard English filler words only — do NOT strip domain terms (like network, layer, cell, model, encoder)
+    # Extract signals from query
+    arxiv_match   = re.search(r"\b(\d{4}\.\d{4,5})\b", query)
+    target_arxiv_id = arxiv_match.group(1) if arxiv_match else None
+    page_match    = re.search(r"\bpage\s*(\d+)\b", query, re.IGNORECASE)
+    target_page   = int(page_match.group(1)) if page_match else None
+    fig_match     = re.search(r"\bfig(?:ure)?\s*(\d+)\b", query, re.IGNORECASE)
+    target_fig    = int(fig_match.group(1)) if fig_match else None
+
+    # ── A. Targeted Qdrant scan when paper ID is present ─────────────────────
+    if target_arxiv_id:
+        try:
+            from utils.models_and_clients import qdrant_client
+            from utils.settings import COLLECTION_NAME
+            from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+            img_candidates: list[dict] = []
+            seen_src: set[str] = set()
+            offset = None
+            scroll_count = 0
+            image_filter = Filter(must=[FieldCondition(key="metadata.chunk_type", match=MatchValue(value="image"))])
+
+            while scroll_count < 5:
+                scroll_count += 1
+                batch, next_off = qdrant_client.scroll(
+                    collection_name=COLLECTION_NAME,
+                    scroll_filter=image_filter,
+                    limit=500,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                for pt in batch:
+                    payload  = pt.payload or {}
+                    meta     = payload.get("metadata", {}) or {}
+                    doc_id   = str(meta.get("doc_id") or meta.get("document_name") or "")
+                    ctype    = (meta.get("chunk_type") or "").lower()
+                    src      = meta.get("source_path") or ""
+                    page_num = meta.get("page_number")
+
+                    if ctype != "image" or not src or target_arxiv_id not in doc_id:
+                        continue
+                    if src in seen_src:
+                        continue
+                    seen_src.add(src)
+
+                    score = 0
+                    if target_page is not None:
+                        if page_num == target_page:
+                            score += 100
+                        else:
+                            # Page mismatch -> hard reject (never attach image from wrong page)
+                            score = -999
+
+                    if target_fig is not None:
+                        m = re.search(r"figure[_\s]?(\d+)", Path(src).stem, re.IGNORECASE)
+                        fig_in_file = int(m.group(1)) if m else None
+                        if fig_in_file == target_fig:
+                            score += 50
+                        else:
+                            # Figure mismatch -> hard reject (never attach wrong figure number)
+                            score = -999
+
+                    img_candidates.append({"source_path": src, "score": score, "page": page_num})
+
+                offset = next_off
+                if not next_off:
+                    break
+
+            if img_candidates:
+                img_candidates.sort(key=lambda x: -x["score"])
+                best = img_candidates[0]
+                # score > 0 means page matched; ≤ 0 means that page doesn't exist in doc
+                return resolve_existing_image_path(best["source_path"]) if best["score"] > 0 else None
+
+        except Exception:
+            pass
+
+    # ── B. Keyword overlap fallback (no paper ID in query) ────────────────────
     stop_words = {
         "the", "this", "that", "these", "those", "show", "me", "what", "is", "are", "a", "an", "of", "for",
         "can", "you", "display", "illustrate", "visualize", "figure", "fig", "diagram",
         "chart", "plot", "image", "picture", "photo", "in", "on", "at", "to", "with", "and", "or",
         "give", "get", "send", "provide", "fetch", "find", "look", "view", "return", "about",
-        "please", "tell", "want", "same", "also", "explain"
+        "please", "tell", "want", "same", "also", "explain", "page", "paper",
     }
-
     query_terms = {
         w for w in re.findall(r"[a-z0-9]+", query.lower())
         if w not in stop_words and len(w) >= 2
     }
 
-    candidates = []
+    candidates: list[dict] = []
 
-    # 1. Gather image chunks from retrieved hits (from vector search)
     if hits:
         for hit in hits:
             text, metadata = _extract_hit_context(hit)
-            chunk_type = (metadata.get("chunk_type") or "").lower()
+            if (metadata.get("chunk_type") or "").lower() != "image":
+                continue
             source_path = metadata.get("source_path") or ""
-            if chunk_type == "image" and source_path:
-                text_terms = set(re.findall(r"[a-z0-9]+", text.lower()))
-                overlap = len(query_terms & text_terms) if query_terms else 1
+            if not source_path:
+                continue
 
-                # If query asked for a specific architecture (e.g. rnn, lstm, transformer, cross, encoder), require model keyword alignment
-                specific_models = {"rnn", "lstm", "gru", "transformer", "cross", "bert", "gpt", "resnet", "vgg", "unet", "diffusion"}
-                requested_models = query_terms & specific_models
-                if requested_models:
-                    if not (text_terms & requested_models):
-                        overlap = 0
+            text_terms = set(re.findall(r"[a-z0-9]+", text.lower()))
+            overlap    = len(query_terms & text_terms) if query_terms else 1
 
-                # Guard against attaching evaluation benchmark plots (MSE, loss, scenario) when an architecture diagram is requested
-                is_diag_request = any(w in query.lower() for w in ["diagram", "architecture", "schematic", "structure", "cell", "model", "image of", "architecture image"])
-                is_eval_plot = any(w in text.lower() for w in ["mse", "percentage of sequence kept", "ablation", "scenario 1", "accuracy vs"]) 
-                # If user explicitly requests an architecture/diagram, require diagram-related keywords in the image text
-                if is_diag_request:
-                    diag_keywords = {"architecture", "diagram", "schematic", "encoder", "decoder", "stack", "layer", "pipeline", "flow", "block", "figure"}
-                    text_terms = set(re.findall(r"[a-z0-9]+", text.lower()))
-                    if not (text_terms & diag_keywords):
-                        overlap = 0
-                # Avoid selecting evaluation plots when an architecture diagram is requested
-                if is_diag_request and is_eval_plot:
-                    overlap = 0
+            specific_models = {"rnn", "lstm", "gru", "transformer", "cross", "bert", "gpt", "resnet", "vgg", "unet", "diffusion"}
+            if query_terms & specific_models and not (text_terms & (query_terms & specific_models)):
+                overlap = 0
 
-                score = float(metadata.get("rerank_score") or getattr(hit, "score", 0.0) or 0.0)
-                candidates.append({
-                    "source_path": source_path,
-                    "overlap": overlap,
-                    "score": score,
-                })
+            score = float(metadata.get("rerank_score") or getattr(hit, "score", 0.0) or 0.0)
+            candidates.append({"source_path": source_path, "overlap": overlap, "score": score})
 
-    # 2. If hits have no image chunks, scroll Qdrant for image chunks
-    if not candidates:
-        try:
-            from utils.models_and_clients import qdrant_client
-            from utils.settings import COLLECTION_NAME
-            res = qdrant_client.scroll(
-                collection_name=COLLECTION_NAME,
-                limit=200,
-                with_payload=True,
-                with_vectors=False,
-            )
-            scrolled_hits = res[0] if res else []
-            for hit in scrolled_hits:
-                text, metadata = _extract_hit_context(hit)
-                if (metadata.get("chunk_type") or "").lower() == "image":
-                    source_path = metadata.get("source_path") or ""
-                    if source_path:
-                        text_terms = set(re.findall(r"[a-z0-9]+", text.lower()))
-                        overlap = len(query_terms & text_terms) if query_terms else 1
-
-                        specific_models = {"rnn", "lstm", "gru", "transformer", "cross", "bert", "gpt", "resnet", "vgg", "unet", "diffusion"}
-                        requested_models = query_terms & specific_models
-                        if requested_models:
-                            if not (text_terms & requested_models):
-                                overlap = 0
-
-                        is_diag_request = any(w in query.lower() for w in ["diagram", "architecture", "schematic", "structure", "cell", "model", "image of"])
-                        is_eval_plot = any(w in text.lower() for w in ["mse", "percentage of sequence kept", "ablation", "scenario 1", "accuracy vs"])
-                        if is_diag_request and is_eval_plot:
-                            overlap = 0
-
-                        if overlap > 0:
-                            candidates.append({
-                                "source_path": source_path,
-                                "overlap": overlap,
-                                "score": 0.5,
-                            })
-        except Exception:
-            pass
-
-    if not candidates:
+    valid = [c for c in candidates if c["overlap"] > 0]
+    if not valid:
         return None
-
-    # Filter to candidates with positive keyword overlap
-    valid_candidates = [c for c in candidates if c["overlap"] > 0]
-    if not valid_candidates:
-        return None
-
-    valid_candidates.sort(key=lambda x: (-x["overlap"], -x["score"]))
-    return valid_candidates[0]["source_path"]
+    valid.sort(key=lambda x: (-x["overlap"], -x["score"]))
+    return valid[0]["source_path"]
 
 
 def generate_support_diagram_image(query: str) -> str | None:
