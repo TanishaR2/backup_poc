@@ -1,118 +1,102 @@
-# InSightDocs Architecture & Design Documentation
+# InSightDocs — Architecture & Design Specifications
 
-This document provides a detailed breakdown of the architecture, design choices, ingestion pipeline, retrieval strategy, and multi-agent orchestration flow within **InSightDocs**.
-
----
-
-## 🏗️ 1. Architectural Philosophy
-
-### LangGraph State-Graph Orchestration Flow
-Instead of black-box agent chains, InSightDocs uses **LangGraph (`StateGraph`)** for transparent, stateful multi-agent orchestration. Developers can step through per-turn execution graphs, profile node latencies directly, and maintain state isolation per query turn.
+## 1. System Overview
+**InSightDocs** is an enterprise-grade, stateful **Multi-Agent Multimodal Document Intelligence Platform**. It ingests mixed-content research papers and enterprise documentation (containing text, formulas, tables, charts, and embedded figure diagrams) into a **Qdrant Vector Database** powered by **BGE-M3 Native ColBERT reranking** and **BM25 hybrid sparse search**.
 
 ---
 
-## 📥 2. Document Ingestion Pipeline
+## 2. Multi-Agent System Architecture
 
-The ingestion pipeline handles technical scientific papers using structural PDF analysis and multimodal chunking.
+The core reasoning engine is built using **LangGraph** as a stateful directed graph. A centralized **Planner Agent** classifies incoming user intents, normalizes queries, resolves pronouns/typos, and dynamically routes execution between retrieval nodes, support guardrails, and real-time internet search tools.
+
+### 🤖 Agentic Workflow Diagram
 
 ```mermaid
-graph TD
-    A[Upload Research PDF] --> B[Docling Structural Parsing]
-    B --> C[Extract Text & Tables]
-    B --> D[Detect Image Bounding Boxes]
-    D --> E[PyMuPDF Crop High-Res Images]
-    E --> F[VLM Generates Text Descriptions]
-    C --> G[Table Bbox & Markdown to LLM Summary]
-    F --> H[Merge & Format Chunks]
-    G --> H
-    H --> I[Generate Local Embeddings BGE-M3]
-    I --> J[Index in Qdrant Vector DB]
+flowchart TD
+    User([User / API Request]) --> Planner[Planner Agent / Route Query]
+
+    Planner -- route='support' --> Support[Support Agent / FAQ & Identity Guardrails]
+    Planner -- route='rag' & needs_web=False --> Retrieval[Retrieval Node / Hybrid Qdrant + BGE-M3 Rerank]
+    Planner -- route='rag' & needs_web=True --> WebSearch[Web Search Node / Tavily / Serper API]
+
+    Retrieval --> RouteConfidence{Retrieval Confidence >= Threshold?}
+    RouteConfidence -- Yes --> Generator[Generation Node / Multi-Model LLM Failover Pool]
+    RouteConfidence -- Low Confidence --> Support
+
+    WebSearch --> Generator
+    Generator --> Validator[Validation Agent / Faithfulness & Relevancy Scoring]
+
+    Support --> Response([Structured JSON API / Streamlit Response])
+    Validator --> Response
 ```
 
-### Docling Structural Parsing & PyMuPDF Image Extraction
-1. **Structural Analysis**: We run **Docling** to parse the PDF document's layout into elements (paragraphs, tables, images, headings).
-2. **PyMuPDF Cropping**: Docling identifies the bounding boxes (`bbox`) of all images on a page. We then use **PyMuPDF (fitz)** to crop and extract these high-resolution images directly from the original PDF file based on the bounding boxes.
-3. **Multimodal Description**: These extracted image files are passed to a Vision-Language Model (VLM) to generate highly descriptive text labels of the figures and charts.
+### 🧩 Core Agent Responsibilities
 
-### Cost-Optimized Table Summaries
-* **The Optimization**: Table rendering and table-image parsing via VLMs are computationally expensive and costly. To save costs, we extract the structural Markdown representation and bounding box metadata directly from Docling and feed it into a text-based LLM.
-* **Fallback Chain**: We use a fallback chain of **Groq** $\rightarrow$ **Gemini** $\rightarrow$ **Azure OpenAI** to perform table summarization. This ensures we attempt the most cost-effective provider first before falling back to premium Azure OpenAI models.
-
-### Ingestion Checkpoint Recovery & Retries
-* **State Checkpoints**: The ingestion process maintains state. If interrupted, the pipeline will resume from the last successful checkpoint instead of re-processing the entire document. It automatically deletes incomplete or corrupted duplicate chunks before resuming.
-* **API Resiliency**: Includes exponential backoff retries for all external LLM/VLM description requests to mitigate rate-limits.
+| Agent / Node | Module Path | Primary Responsibility | Key Inputs / Outputs |
+|---|---|---|---|
+| **Planner Agent** | `app/agents/planner_agent.py` | Analyzes query intent, performs coreference resolution, rewrites typos (*"vanderrer"* ➔ *"VANDERER"*), and outputs routing metadata (`route`, `scope`, `needs_image`, `needs_web_search`, `answer_length`). | Input: Raw query<br>Output: Structured routing JSON |
+| **Retrieval Node** | `app/agents/nodes.py` | Queries Qdrant using dense BGE-M3 vectors + BM25 sparse index, applies BGE-M3 Native ColBERT reranking, and extracts visual image chunks. | Input: Rewritten query<br>Output: Top reranked context chunks |
+| **Generation Node** | `app/agents/nodes.py` | Synthesizes grounded, technical answers with LaTeX equations using a multi-provider LLM Failover Pool. | Input: Context chunks<br>Output: Final text answer |
+| **Validation Agent** | `app/agents/nodes.py` | Evaluates answer faithfulness against retrieved chunks ($0.40\text{faithfulness} + 0.30\text{relevancy} + 0.30\text{recall}$). | Input: Query + Context + Answer<br>Output: Validation score & status |
+| **Support Agent** | `app/agents/support_agent.py` | Handles user identity guardrails (`who am i`), assistant introductions, knowledge base document title inventory, and parametric fallbacks. | Input: Support query<br>Output: Guardrailed answer |
+| **Web Search Node** | `app/agents/web_search_tool.py` | Queries Tavily / Serper APIs for real-time external web search when technical context requires recent SOTA verification. | Input: Web query<br>Output: Live web search snippets |
 
 ---
 
-## 🔍 3. Vector Database & Hybrid Retrieval Strategy
+## 3. Azure Cloud Infrastructure Architecture
 
-InSightDocs combines lexical matching, dense semantic matching, and cross-encoder reranking to fetch the highest-quality context.
+InSightDocs is designed for production container hosting on **Microsoft Azure**, using **Azure Container Apps**, **Azure Blob Storage**, **Azure Key Vault**, and **Azure OpenAI**.
 
-### Qdrant Vector Database
-All document chunks (text, table summaries, and image descriptions) are indexed in a high-performance **Qdrant** collection.
-
-### Hybrid BM25 & Dense Search (RRF)
-To ensure we capture both exact keyword matches (e.g., technical equations, model names) and semantic intent:
-* **Dense Retrieval**: We use local `BAAI/bge-m3` embeddings, which are highly performant and open-source.
-* **Sparse Retrieval**: BM25 keyword matching is computed alongside the dense cosine similarities.
-* **Reciprocal Rank Fusion (RRF)**: Merges the ranked outputs of dense and sparse searches into a single unified list.
-
-### Cohere Rerank (`rerank-v3.5`)
-* After fetching the top candidates, we pass them to Cohere's Cross-Encoder reranking API.
-* Reranking evaluates the query-to-context relevance dynamically, returning a prioritized context chunk list with high-accuracy scores.
-
----
-
-## 🤖 4. Multi-Agent Orchestration Flow
-
-Every incoming user query triggers a coordinated multi-agent workflow powered by LangGraph:
+### ☁️ Azure Cloud Deployment Diagram
 
 ```mermaid
-graph TD
-    UserQuery[User Query] --> FAQ{Semantic FAQ Cache?}
-    FAQ -->|Match >= 0.75| InstantAnswer[Instant FAQ Response]
-    FAQ -->|No Match| Planner[Planner Agent Node]
-    
-    Planner -->|RAG Route| Retrieval[Hybrid Retrieve & Cohere Rerank]
-    Planner -->|Support Route| Support[Independent Support Agent]
-    
-    Retrieval --> ConfCheck{Confidence >= 0.30?}
-    ConfCheck -->|Yes| SkipVal{Confidence >= 0.80?}
-    ConfCheck -->|No| Support
-    
-    SkipVal -->|Yes: Skip Judge| Generation[RAG Generation Service]
-    SkipVal -->|No: Validate| Validation[Validation Judge Agent]
-    
-    Validation --> ValCheck{Validation Score >= 0.70?}
-    ValCheck -->|Passed| Generation
-    ValCheck -->|Failed| Support
-    
-    Support --> WebImage[Live Web Image Search / SVG Fallback]
+flowchart LR
+    subgraph Client Layer
+        WebUI[Streamlit Web App]
+        RestAPI[FastAPI Gateway Services]
+    end
+
+    subgraph Azure Cloud Platform
+        subgraph Compute & Container Hosting
+            ACA[Azure Container Apps / App Service]
+        end
+
+        subgraph Storage & Secrets
+            Blob[Azure Blob Storage / PDF & Image Artifacts]
+            KV[Azure Key Vault / Secret & Key Management]
+        end
+
+        subgraph AI & Inference Services
+            AOAI[Azure OpenAI Service / GPT-5.4 Primary Model]
+            GroqPool[Groq Llama 3.3 / Failover Backup Pool]
+        end
+
+        subgraph Vector Engine
+            QdrantDB[(Qdrant Vector Database / Hybrid Index)]
+        end
+    end
+
+    WebUI --> ACA
+    RestAPI --> ACA
+    ACA --> Blob
+    ACA --> KV
+    ACA --> QdrantDB
+    ACA --> AOAI
+    AOAI -- Failover --> GroqPool
 ```
 
-1. **Semantic FAQ Engine (`faq_node`)**: Checks incoming queries against a cached FAQ store (`data/faq.json`). High-confidence matches ($\ge 0.75$) return instant cached answers.
-2. **Planner Agent Node (`planner_node`)**: Performs structured LLM query classification, correcting typos and determining routing (`rag` vs `support`), visual intent (`needs_image`), web search requirement (`needs_web_search`), and answer length.
-3. **Retrieval Confidence Check (`retrieval_node`)**: Evaluates average rerank confidence score of top hits. If Confidence $< 0.30$, redirects to Support Agent.
-4. **Validation Agent (`validation_node`)**: LLM-as-a-judge scoring candidate answers on Faithfulness, Answer Relevancy, and Context Recall. If score $< 0.70$, redirects to Support Agent.
-5. **Independent Support Agent (`support_node`)**: Operates independently by discarding RAG state upon fallback. Uses LLM parametric knowledge and fetches real architecture diagrams via **Live Web Image Search (Tavily API)** with high-contrast SVG diagram fallback.
-
 ---
 
-## 💻 5. Streamlit Interactive UI
+## 4. Architecture Decision Records (ADRs)
 
-The UI provides a modern, fast, and informative chat interface.
-* **Dynamic Ingestion**: Support for uploading scientific papers directly from the sidebar. Files are processed and indexed in real-time.
-* **⚡ Inline Flow Trace Reports**: Appended directly inside the chat response bubble under a collapsible `<details>` toggle. It provides full transparency for every query:
-  * Route selected by the Planner and its reason.
-  * Raw vs. reranked retrieval scores of the top chunk.
-  * Validation Agent scores (Faithfulness, Relevancy, Recall) and verdict.
-  * Routed engine and total execution latency.
+### ADR 1: LangGraph for Stateful Multi-Agent Orchestration
+- **Decision**: Adopt LangGraph state machine over linear chains.
+- **Rationale**: Enables conditional branching, dynamic loops, confidence-based edge fallbacks, and fine-grained state inspection across nodes.
 
----
+### ADR 2: Hybrid Qdrant Vector Search + BGE-M3 Native ColBERT Reranking
+- **Decision**: Use Qdrant with dense BGE-M3 embeddings, BM25 sparse vectors, and BGE-M3 ColBERT late-interaction reranking.
+- **Rationale**: Reranking elevates exact technical phrase precision, page-level figure lookup, and table metric retrieval.
 
-## 🚀 6. Future Roadmap
-
-1. ✅ **Workflow Decoupling (Completed)**: LangGraph state-graph router for stateful multi-agent execution.
-2. ✅ **FAQ Caching (Completed)**: In-memory vector matching against cached Q&A with dynamic promotion.
-3. **Enhanced Checkpoint Recovery**: Resuming incomplete PDF ingestion cleanly and deleting corrupted doc chunks.
-4. **Internal Automated Evaluation**: Scheduled cron jobs running local RAGAS evaluators on periodic schedules.
+### ADR 3: Multi-Provider LLM Failover Pool
+- **Decision**: Implement a 4-step failover chain (`Azure OpenAI GPT-5.4` ➔ `Azure OpenAI GPT-5.4 Backup` ➔ `OpenAI GPT-4o-mini` ➔ `Groq Llama-3.3-70B`).
+- **Rationale**: Guarantees zero-downtime availability and high throughput resilience against quota rate limits (HTTP 429) or regional outages (HTTP 401).

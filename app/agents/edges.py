@@ -18,6 +18,11 @@ def route_after_retrieval(state: AgentState) -> str:
         f"[Edge: after_retrieval] Confidence={confidence:.2f} | Hits={len(hits)} | RetrievedImage={retrieved_img}"
     )
 
+    # If top ColBERT rerank score is below minimal relevance (< 0.52) and no image retrieved, route to support fallback
+    if confidence < 0.52 and not retrieved_img:
+        logger.warning(f"[Edge: after_retrieval] Retrieval confidence too low ({confidence:.2f} < 0.52) -> support fallback")
+        return "support"
+
     # If hits retrieved or image found, proceed to generation
     if hits or retrieved_img or confidence >= 0.35:
         logger.info("[Edge: after_retrieval] Context/Image retrieved -> proceeding to generation")
@@ -57,8 +62,10 @@ def route_after_validation(state: AgentState) -> str:
     score = validation.get("score", 0.0)
     route = state.get("route", "")
 
-    # RAG queries for research papers MUST ALWAYS complete at final node (never escalate RAG queries to Support Agent web search)
     if route == "rag":
+        if not passed and score < 0.55:
+            logger.warning(f"[Edge: after_validation] RAG route validation FAILED (score={score:.3f} < 0.55) -> routing to support fallback")
+            return "support"
         logger.info(f"[Edge: after_validation] RAG route (passed={passed}, score={score:.3f}) -> final")
         return "final"
 
@@ -69,5 +76,3 @@ def route_after_validation(state: AgentState) -> str:
     logger.success(f"[Edge: after_validation] Score={score:.3f} PASSED -> final")
     return "final"
 
-    logger.success(f"[Edge: after_validation] Score={score:.3f} PASSED -> final")
-    return "final"

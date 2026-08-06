@@ -1,437 +1,231 @@
-# InSightDocs
+# InSightDocs: Multi-Agent Multimodal Document Intelligence Platform
 
-**Multimodal Multi-Agent RAG pipeline for AI/ML research papers.**
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg)](https://fastapi.tiangolo.com/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.40+-FF4B4B.svg)](https://streamlit.io/)
+[![LangGraph](https://img.shields.io/badge/LangGraph-Stateful_Agents-orange.svg)](https://langchain-ai.github.io/langgraph/)
+[![Qdrant](https://img.shields.io/badge/Qdrant-Hybrid_Vector_DB-red.svg)](https://qdrant.tech/)
+[![BGE-M3](https://img.shields.io/badge/BGE--M3-Native_ColBERT_Rerank-green.svg)](https://huggingface.co/BAAI/bge-m3)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-InSightDocs ingests research PDFs — extracting text, figures, and tables — and serves answers through a stateful, confidence-aware retrieval-augmented generation pipeline powered by LangGraph multi-agent orchestration, LLM-based intent routing, document domain validation, and semantic FAQ caching.
-
----
-
-## Table of Contents
-
-- [InSightDocs](#insightdocs)
-  - [Table of Contents](#table-of-contents)
-  - [Overview](#overview)
-  - [Architecture \& LangGraph Flow](#architecture--langgraph-flow)
-  - [Project Structure](#project-structure)
-  - [Setup](#setup)
-    - [Prerequisites](#prerequisites)
-    - [Installation](#installation)
-  - [Environment Variables](#environment-variables)
-  - [Running the System](#running-the-system)
-    - [1. Launch FastAPI Web Server](#1-launch-fastapi-web-server)
-    - [2. Launch Streamlit Web Interface](#2-launch-streamlit-web-interface)
-  - [API Reference](#api-reference)
-  - [Ingestion Safeguards \& Pipeline](#ingestion-safeguards--pipeline)
-    - [Document Ingestion Safeguards (`app/ingestion/document_validator.py`)](#document-ingestion-safeguards-appingestiondocument_validatorpy)
-    - [Ingestion Flow](#ingestion-flow)
-  - [Retrieval Pipeline](#retrieval-pipeline)
-  - [Generation \& Multi-Agent Pipeline](#generation--multi-agent-pipeline)
-    - [LangGraph Agent Architecture (`app/agents/`)](#langgraph-agent-architecture-appagents)
-  - [Semantic FAQ Cache](#semantic-faq-cache)
-  - [Confidence Scoring \& Fallback](#confidence-scoring--fallback)
-  - [Prompts](#prompts)
-  - [Testing \& Verification](#testing--verification)
-    - [Verified Safeguards Status](#verified-safeguards-status)
-  - [Configuration](#configuration)
-  - [Data Directory Layout](#data-directory-layout)
-  - [📖 Detailed Codebase Documentation](#-detailed-codebase-documentation)
-  - [🔮 Future Roadmap \& Enhancements](#-future-roadmap--enhancements)
+**InSightDocs** is an enterprise-grade AI platform designed to ingest, index, and analyze complex mixed-content research papers and enterprise documentation (containing text, formulas, tables, charts, and embedded figure diagrams). Powered by a collaborating team of **LangGraph AI Agents**, **Qdrant Hybrid Vector Store**, **BGE-M3 Native ColBERT Reranking**, and a **Multi-Tier LLM Failover Pool**.
 
 ---
 
-## Overview
-
-InSightDocs is an enterprise-grade RAG system built specifically for AI/ML research paper Q&A. It processes complex multimodal content (page texts, figures with VLM descriptions, and tables with LLM descriptions) from PDFs and utilizes a stateful LangGraph multi-agent architecture for query classification, semantic caching, document retrieval, validation, and web search fallback.
-
-Key capabilities:
-
-- **LangGraph Multi-Agent Orchestration** — Graph-driven state workflow connecting Planner, RAG, FAQ, Support, Validation, and Web Search agents.
-- **Multimodal Ingestion** — Extracts page text via Docling structural layout, figure images with PyMuPDF & VLM descriptions (Gemini/OpenAI), and tables with LLM markdown summaries (Groq).
-- **Ingestion & Domain Safeguards** — Strict document validation checking file format (`.pdf`), size (≤10MB), length (≤100 pages), and lightweight LLM domain verification ensuring papers are strictly AI/ML/Deep Learning research before indexing.
-- **Unified Structured LLM Planner Router** — Zero static regex or keyword rules; a single structured LLM classification call determines query route (`rag` vs `support`), visual intent (`needs_image`), web search necessity (`needs_web_search`), atomic structure (`is_atomic`), and domain (`ai_ml_technical`, `greeting`, `out_of_domain`).
-- **Semantic FAQ Engine** — High-performance in-memory vector matching against cached Q&A with dynamic promotion based on frequency (`hit_count >= 3`) and confidence (`>= 0.75`), stored cleanly in `data/faq.json`.
-- **Hybrid Retrieval & Reranking** — Dense + sparse BGE-M3 embeddings merged with RRF (Reciprocal Rank Fusion) and reranked using Cohere `rerank-v3.5`.
-- **Confidence-Gated Validation & Escalation** — RAGAS-based answer faithfulness and relevancy judge gates final answers, falling back to Support Agent + Web Search when context confidence is low.
-- **Multi-Provider Failover** — Resilient LLM failover order: Groq → Google Gemini → Azure OpenAI.
-- **Strict Targeted RAG Image Selection & Grounding** — Filtered Qdrant payload scanning with strict page/figure hard-rejection, base64 VLM visual grounding, and humble, professional response formatting listing available paper figures.
-- **Interactive UI & REST API** — Streamlit app with step-by-step Flow Trace Reports and FastAPI web server.
-
----
-
-## Architecture & LangGraph Flow
-
-```
-                              User Query
-                                  │
-                                  ▼
-                        ┌──────────────────┐
-                        │    FAQ Agent     │  ─── Match found ──► Return Cached FAQ Response
-                        └────────┬─────────┘      (Confidence >= 0.75)
-                                 │ No match
-                                 ▼
-                        ┌──────────────────┐
-                        │  Planner Agent   │  ─── Structured LLM Intent Classification
-                        └────────┬─────────┘
-                                 │
-                 ┌───────────────┴───────────────┐
-                 │ route="rag"                   │ route="support"
-                 ▼                               ▼
-       ┌──────────────────┐            ┌──────────────────┐
-       │ Retrieval (RRF)  │            │  Support Agent   │ ◄── Needs Web Search ──► Tavily Web Search
-       │ + Cohere Rerank  │            │ (Tech Refusal /  │
-       └────────┬─────────┘            │  Parametric LLM) │
-                │                      └──────────────────┘
-     Retrieval Confidence
-                │
-     < 0.50 ────┴──────────────────────────────┐
-                │                              │
-     >= 0.50    │                              │
-                ▼                              │
-       ┌──────────────────┐                    │
-       │ Generation Agent │                    │
-       └────────┬─────────┘                    │
-                │                              │
-     Retrieval Confidence                      │
-     < 0.80     │      >= 0.80 (Fast Path)     │
-                ├─────────────────┐            │
-                ▼                 │            │
-       ┌──────────────────┐       │            │
-       │ Validation Agent │       │            │
-       └────────┬─────────┘       │            │
-                │                 │            │
-        Validation Score          │            │
-        < 0.70 ─┼─────────────────┼────────────┘
-                │ >= 0.70         │
-                ▼                 ▼
-          Answer Returned & Evaluation Tracked
-```
-
----
-
-## Project Structure
+## 📂 Project Directory Structure
 
 ```
 InSightDocs/
-├── api/                          # FastAPI web server
-│   ├── main.py                   # FastAPI app factory & CORS
-│   ├── routes.py                 # REST endpoints (/health, /ingest, /query, /faq, /documents, /status)
-│   ├── schemas.py                # Pydantic request & response schemas
-│   └── services.py               # Document ingestion & query execution services
+├── api/                        # FastAPI Web Application Gateway
+│   ├── routes.py               # REST Endpoints (/health, /query, /ingest, /inventory)
+│   ├── schemas.py              # Pydantic Request/Response Models
+│   └── services.py             # FastAPI Service Dispatcher & Ingestion Helpers
 │
-├── app/                          # Core application logic
-│   ├── agents/                   # LangGraph multi-agent system
-│   │   ├── graph.py              # Compiled LangGraph workflow state graph
-│   │   ├── nodes.py              # Graph execution nodes (planner, rag, support, validation, faq)
-│   │   ├── edges.py              # Conditional edge routers between graph nodes
-│   │   ├── state.py              # Graph state definition (AgentState)
-│   │   ├── orchestrator.py       # High-level query execution orchestrator
-│   │   ├── planner_agent.py      # Structured LLM query classifier & intent router
-│   │   ├── support_agent.py      # Support agent with parametric fallback & refusal guardrails
-│   │   ├── validation_agent.py   # RAGAS-style faithfulness & relevancy validation judge
-│   │   ├── faq_agent.py          # Fast in-memory semantic FAQ caching engine
-│   │   ├── web_search_tool.py    # Dynamic Tavily web search tool integration
-│   │   ├── graph_mermaid.mmd     # Mermaid diagram source for graph architecture
-│   │   └── graph_diagram.md      # Mermaid visual diagram documentation
+├── app/                        # Core Application Engine
+│   ├── agents/                 # Multi-Agent LangGraph Framework
+│   │   ├── graph.py            # Stateful LangGraph Workflow Engine
+│   │   ├── nodes.py            # Workflow Execution Nodes (Retrieval, Generation, Validation)
+│   │   ├── edges.py            # Conditional Edge Routing & Confidence Thresholds
+│   │   ├── planner_agent.py    # Intent Classification, Query Rewriting & Typo Fixes
+│   │   ├── support_agent.py    # FAQ Routing, User Identity Guardrail & Inventory Listing
+│   │   ├── validation_agent.py # Faithfulness, Relevancy & Context Recall Evaluation
+│   │   └── web_search_tool.py  # Parallel Internet Web Search (Tavily / Serper API)
 │   │
-│   ├── generation/               # Answer synthesis & evaluation
-│   │   ├── generation_service.py # Core answer generation logic & provider failover
-│   │   ├── query_utils.py        # Answer parsing, citation injection, & multimodal processing
-│   │   └── interactive_evaluator.py # Real-time evaluation logging & trace collection
+│   ├── ingestion/              # Document Ingestion & Parsing Services
+│   │   ├── pdf_extractor.py    # PyMuPDF / Marker Content Extraction (Text, Tables, Figures)
+│   │   ├── qdrant_indexing.py  # BM25 Sparse + BGE-M3 Dense Vector Upserting
+│   │   └── ingest_markdown_faq.py # Semantic Sub-Chunking & Ingestion for data/faq.md
 │   │
-│   ├── ingestion/                # Document extraction, validation & indexing
-│   │   ├── document_validator.py # Pre-ingestion safeguards (type, size, page count, LLM domain check)
-│   │   ├── extractor_pipeline.py # Multimodal extraction pipeline orchestrator
-│   │   ├── ingestor_pipeline.py  # Chunker, embedder, & Qdrant indexer
-│   │   ├── document_loader.py    # PDF text parsing via Docling structural layout
-│   │   ├── image_extractor.py    # Figure image extraction via PyMuPDF
-│   │   ├── image_describer.py    # Figure description generator via VLM (Gemini/Azure)
-│   │   ├── table_extractor.py    # Table extraction to Markdown
-│   │   ├── table_describer.py    # Table description generator via LLM
-│   │   ├── content_aggregator.py # Merges page artifacts into manifest.json
-│   │   ├── chunker.py            # Splits document manifest into indexed chunks
-│   │   ├── embedding_service.py  # BAAI/bge-m3 dense & sparse vector generation
-│   │   ├── qdrant_ingestor.py    # Qdrant payload builder & vector batch loader
-│   │   ├── status_tracker.py     # Checkpoint processing status tracking (completed/incomplete)
-│   │   ├── metadata_builder.py   # Ingestion metadata builder
-│   │   └── recovery.py           # Ingestion retry & error recovery logic
+│   ├── retriever/              # Hybrid Retrieval Engine
+│   │   └── retrieval_service.py # Qdrant Search, ColBERT Reranking & Title Pagination
 │   │
-│   └── retriever/                # Retrieval engine
-│       └── retrieval_service.py  # Hybrid search (Dense+Sparse RRF) & Cohere reranking
+│   └── generation/             # Answer Synthesis Engine
+│       ├── generation_service.py # Prompt Builder & LLM Failover Invocation
+│       └── query_utils.py       # Retrieval Confidence Scoring & Answer Cleanup
 │
-├── data/                         # Persistent application data
-│   ├── faq.json                  # Semantic FAQ cache storage
-│   ├── uploads/                  # Input PDF document storage
-│   └── output/                   # Extracted manifests, images, tables & conversation logs
+├── data/                       # Data Stores & Artifacts
+│   ├── faq.md                  # Project FAQ & 103+ Research Paper Titles Manifest
+│   ├── output/                 # Extracted PDF Assets, Images & Conversions
+│   │   ├── pdfs/               # Extracted Text, Tables & Images per Document
+│   │   ├── processing_status/  # complete.json Recovery Checkpoints
+│   │   └── chat_conversations/ # Chat History Logs
+│   └── reports/                # Benchmark Telemetry & Test Evaluation Outputs
 │
-├── prompts/                      # Centralized LLM prompts
-│   └── prompts.py                # Generation, visual description, table description, & agent prompts
+├── docs/                       # Architectural Specifications
+│   └── architecture_and_design.md # Agentic & Cloud Mermaid Diagrams + ADRs
 │
-├── utils/                        # Utilities & configuration
-│   ├── settings.py               # Environment variables, thresholds, & application settings
-│   ├── models_and_clients.py     # Singleton LLM, VLM, embedding, & vector store clients
-│   └── logger_config.py          # Unified Loguru logging setup
+├── groundtruth_evaluation/     # Ground Truth Evaluation Benchmark Suite
+│   ├── build_datasets.py       # Dataset Generator (5, 100, 1000 query sets)
+│   ├── evaluate_retrieval.py   # Retrieval Benchmark (MRR, MAP, Hit Rate @ K)
+│   └── evaluate_generation.py  # Generation Benchmark (LLM-as-Judge Faithfulness)
 │
-├── tests/                        # Automated unit & integration test suites
-│   ├── conftest.py               # Test fixtures & heavy client mocks
-│   ├── test_domain_and_ingestion_safeguards.py # Ingestion & domain refusal tests
-│   ├── test_faq_agent.py         # Semantic FAQ engine unit tests
-│   ├── test_langgraph_workflow.py# LangGraph multi-agent execution tests
-│   ├── test_ingest_unit.py       # Document ingestion unit tests
-│   ├── test_retrieval_unit.py    # Hybrid retrieval & reranking tests
-│   ├── test_generation_unit.py   # Answer synthesis unit tests
-│   └── test_planner_query_correction.py # Planner router classification tests
+├── prompts/                    # Master Prompt Engineering Registry
+│   └── prompts.py              # Planner, Generation, Support & Validation Prompts
 │
-├── app.py                        # Streamlit web UI with Flow Trace Reports
-├── main.py                       # CLI application launcher
-├── pyproject.toml                # Project dependencies & metadata
-├── uv.lock                       # Dependency lockfile
-└── README.md                     # Documentation
+├── tests/                      # Automated Production Pytest Test Suite
+│   ├── test_api_routes.py      # FastAPI Endpoint Tests
+│   ├── test_planner_agent.py   # Planner Intent & Typo Correction Tests
+│   ├── test_ingestion_service.py # Ingestion & Checkpoint Recovery Tests
+│   ├── test_retrieval_service.py # Hybrid Qdrant Search & Title Pagination Tests
+│   ├── test_generation_service.py # LLM Failover Pool & Answer Grounding Tests
+│   ├── test_support_agent.py   # User Identity Guardrail & Paper Inventory Tests
+│   ├── test_validator_and_web.py # Faithfulness Scoring & Web Search Tests
+│   └── test_multimodal_features.py # Multimodal Image Chunk Lookup Tests
+│
+├── utils/                      # Infrastructure & Model Utilities
+│   ├── logger_config.py        # Central Loguru Logger Setup
+│   ├── models_and_clients.py   # Multi-Tier LLM Failover Pool Manager
+│   └── settings.py             # Environment Configuration Settings
+│
+├── extra/                      # Archived Benchmark Artifacts & Reference Guides
+├── app.py                      # Interactive Streamlit UI Client
+├── main.py                     # FastAPI Application Server Entrypoint
+├── pyproject.toml              # Project Dependencies & Metadata
+└── README.md                   # Master Documentation Guide
 ```
 
 ---
 
-## Setup
+## 🌟 Core Architecture Services & Agents
 
-### Prerequisites
+### 🧠 3 Core Application Services
 
-- **Python 3.11+**
-- **[`uv`](https://docs.astral.sh/uv/)** package manager
-- **Qdrant Vector Database** (local instance or cloud cluster)
-- **API Keys** for required providers:
-  - Groq, Google Gemini, or Azure OpenAI (at least one LLM provider)
-  - Cohere API Key (for hybrid reranking)
-  - Tavily API Key (optional, for web search fallback)
+1. **Ingestion Service (`app/ingestion/`)**:
+   - Extracts text, markdown tables, and visual figure images (`page_N_figure_M.png`).
+   - Maintains recovery checkpoints (`data/output/processing_status/complete.json`) to skip already processed papers.
+   - Enforces dynamic upload safeguards (e.g. 20 MB max file size, 100 pages max).
+   - Sub-chunks `data/faq.md` into semantic FAQ points upserted into Qdrant collection `InsightDocs`.
 
-### Installation
+2. **Retrieval Service (`app/retriever/`)**:
+   - Combines dense BGE-M3 embeddings with BM25 sparse keyword vectors stored in Qdrant.
+   - Applies **BGE-M3 Native ColBERT reranking** to elevate exact technical phrase and table precision.
+   - Uses fast Qdrant payload scrolling to retrieve all **103+ indexed paper titles** in sub-second latency.
+
+3. **Generation Service (`app/generation/`)**:
+   - Powered by a **Multi-Tier LLM Failover Pool** (`Azure OpenAI GPT-5.4` ➔ `Azure OpenAI Backup` ➔ `OpenAI GPT-4o-mini` ➔ `Groq Llama-3.3-70B`).
+   - Formulates grounded technical responses formatted with clean LaTeX math equations (`\(...\)`, `\[...\]`) and Markdown tables.
+
+---
+
+### 🤖 Primary AI Agents & Nodes
+
+| Agent / Node Name | Module Path | Purpose & Features |
+|---|---|---|
+| **Planner Agent** | `app/agents/planner_agent.py` | Classifies query route (`rag` vs `support`), scope (`documents` vs `faq`), fixes typos (*"vanderrer"* ➔ *"VANDERER"*), resolves pronouns, detects atomic vs non-atomic intent, and flags `needs_image` / `needs_web_search`. |
+| **Support Agent** | `app/agents/support_agent.py` | Enforces user identity guardrails (*"who am i"* ➔ identity refusal + assistant intro), lists 103+ Knowledge Base paper titles, and handles parametric ML fallbacks. |
+| **Validation Agent** | `app/agents/nodes.py` | Evaluates answer factuality against retrieved context ($0.40\text{faithfulness} + 0.30\text{relevancy} + 0.30\text{recall}$). Routes low-confidence queries to support fallback. |
+| **Web Search Agent** | `app/agents/web_search_tool.py` | Performs parallel real-time internet search via Tavily / Serper API when SOTA verification is flagged by Planner. |
+
+---
+
+## 🛠️ Step-by-Step Execution Guide
+
+### 1. Environment Configuration
+Copy `example.env` to `.env` and configure your API keys:
 
 ```bash
-git clone <repo-url>
-cd InSightDocs
-uv sync
+cp example.env .env
 ```
 
----
+Key environment variables:
+```ini
+QDRANT_HOST=localhost
+QDRANT_PORT=6333
+QDRANT_COLLECTION=InsightDocs
 
-## Environment Variables
+AZURE_OPENAI_API_KEY_5_4=your_azure_key
+AZURE_OPENAI_ENDPOINT_5_4=https://your-resource.openai.azure.com/
 
-Create a `.env` file in the project root:
-
-```env
-# Qdrant Vector DB
-QDRANT_ENDPOINT=https://your-qdrant-instance.cloud
-QDRANT_API_KEY=your_qdrant_api_key
-
-# Primary LLM Providers (tested in order: Groq -> Gemini -> Azure OpenAI)
-GROQ_API_KEY=your_groq_api_key
-GROQ_API_KEY2=your_groq_api_key_2           # optional secondary key
-
-GOOGLE_API_KEY3=your_google_gemini_api_key
-
-AZURE_OPENAI_API_KEY=your_azure_key
-AZURE_OPENAI_ENDPOINT=https://your-resource.openai.azure.com/
-AZURE_OPENAI_API_VERSION=2024-02-01
-AZURE_OPENAI_MODEL_NAME=your_deployment_name
-AZURE_OPENAI_MODEL_VERSION=your_model_version
-
-# Cohere (Reranking)
-COHERE_API_KEY=your_cohere_api_key
-
-# Tavily (Web Search Fallback)
+GROQ_API_KEY_1=your_groq_key
 TAVILY_API_KEY=your_tavily_key
 ```
 
 ---
 
-## Running the System
+### 2. Running System Services
 
-### 1. Launch FastAPI Web Server
+#### A. Start FastAPI Backend API Server
+```bash
+# Run server via main.py entrypoint
+python main.py
+
+# Or directly via Uvicorn
+uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+- **API Documentation**: Open `http://localhost:8000/docs` in your browser.
+- **Endpoints**:
+  - `GET  /health`: Health status endpoint
+  - `GET  /inventory`: List total indexed paper count & document titles
+  - `POST /query`: Query API accepting text and optional image upload
+  - `POST /ingest`: Upload and ingest PDF document into Qdrant
+
+#### B. Start Streamlit Interactive UI Frontend
+```bash
+streamlit run app.py
+```
+- Open `http://localhost:8501` to use the interactive chat dashboard.
+
+#### C. Ingest FAQ & System Knowledge Base
+```bash
+python app/ingestion/ingest_markdown_faq.py
+```
+
+---
+
+### 3. Running Automated Production Tests (`pytest`)
+
+Execute the complete automated test suite covering all services, agents, guardrails, and API routes:
 
 ```bash
-uv run uvicorn api.main:app --reload --port 8000
-```
-- Swagger UI: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+# Run all tests in parallel/verbose mode
+pytest tests/ -v
 
-### 2. Launch Streamlit Web Interface
+# Run specific test modules
+pytest tests/test_api_routes.py -v
+pytest tests/test_planner_agent.py -v
+pytest tests/test_ingestion_service.py -v
+pytest tests/test_retrieval_service.py -v
+pytest tests/test_generation_service.py -v
+pytest tests/test_support_agent.py -v
+pytest tests/test_validator_and_web.py -v
+pytest tests/test_multimodal_features.py -v
+```
+
+---
+
+### 4. Running Ground Truth Benchmark Evaluation
+
+To compute retrieval accuracy (MRR, MAP, Hit Rate @ K) and LLM-as-Judge generation quality:
 
 ```bash
-uv run streamlit run app.py
-```
-- Web Application UI: [http://localhost:8501](http://localhost:8501)
+# 1. Generate ground truth datasets
+python groundtruth_evaluation/build_datasets.py
 
----
+# 2. Evaluate retrieval performance
+python groundtruth_evaluation/evaluate_retrieval.py
 
-## API Reference
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `/health` | `GET` | System health check and API status |
-| `/ingest` | `POST` | Upload and process a research PDF into Qdrant |
-| `/query` | `POST` | Execute a multi-agent RAG query with trace data |
-| `/documents` | `GET` | List all ingested documents across collections |
-| `/faq` | `GET` | Retrieve stored semantic FAQ cache records |
-| `/status/{doc_id}` | `GET` | Query extraction and ingestion status for a document |
-
----
-
-## Ingestion Safeguards & Pipeline
-
-### Document Ingestion Safeguards (`app/ingestion/document_validator.py`)
-
-Prior to processing or vectorizing any file, `validate_document_for_ingestion` enforces strict technical boundaries:
-
-1. **File Extension Check** — Rejects non-PDF files (`.txt`, `.docx`, etc.).
-2. **File Size Boundary** — Rejects files exceeding **10 MB**.
-3. **Page Count Boundary** — Rejects PDFs exceeding **100 pages**.
-4. **AI/ML Technical Domain Check** — Samples text from the first 3 pages and executes a lightweight LLM domain classification. Files outside AI, Machine Learning, or Deep Learning (e.g., cooking recipes, general finance) are rejected immediately.
-5. **Checkpoint Skip Logic** — Skips re-extraction and re-indexing if `doc_id` is already recorded as `completed` in processing status.
-
-### Ingestion Flow
-
-```
-PDF File
-  │
-  ▼
-document_validator.py  ──► [Type / Size / Page Count / LLM Domain Check]
-  │ (Passed)
-  ▼
-document_loader.py     ──► Docling PDF parsing -> Page Markdown text
-  │
-  ├─► image_extractor.py ──► PyMuPDF figure extraction -> Image files
-  │       └── image_describer.py ──► VLM figure summary generation
-  │
-  ├─► table_extractor.py ──► Table extraction to Markdown
-  │       └── table_describer.py ──► LLM table description generation
-  │
-  └─► content_aggregator.py ──► Aggregate all into manifest.json
-          │
-          ▼
-      chunker.py ──► Split document into semantic text/image/table chunks
-          │
-          ▼
-  embedding_service.py ──► Generate BAAI/bge-m3 dense & sparse vectors
-          │
-          ▼
-  qdrant_ingestor.py ──► Upsert to Qdrant vector store in batches
+# 3. Evaluate generation quality (LLM-as-Judge)
+python groundtruth_evaluation/evaluate_generation.py
 ```
 
 ---
 
-## Retrieval Pipeline
+## ⚡ Special Production Features
 
-`app/retriever/retrieval_service.py` provides hybrid search and reranking:
-
-- **Dense + Sparse Hybrid Search**: Queries Qdrant using `BAAI/bge-m3` dense vectors and sparse lexical weights.
-- **Reciprocal Rank Fusion (RRF)**: Merges dense and sparse search rankings.
-- **Cohere Rerank v3.5**: Reranks top hits for maximum context relevance before generation.
-
----
-
-## Generation & Multi-Agent Pipeline
-
-### LangGraph Agent Architecture (`app/agents/`)
-
-1. **FAQ Agent (`faq_agent.py`)**: Strictly matches project-related questions about InSightDocs (capabilities, limits, architecture, API) using in-memory vector embeddings of `data/faq.json`.
-2. **Planner Agent (`planner_agent.py`)**: Runs structured LLM classification returning `route`, `needs_image`, `needs_web_search`, `is_atomic`, and `domain`.
-3. **Support Agent (`support_agent.py`)**: Handles non-RAG, greeting, and out-of-domain queries. Rejects general non-tech queries with standard identity refusal, uses LLM parametric knowledge for technical fallback, and invokes Tavily Web Search when `needs_web_search: true`.
-4. **Generation Service (`generation_service.py`)**: Synthesizes comprehensive answers using retrieved chunks with multi-provider failover.
-5. **Validation Agent (`validation_agent.py`)**: Evaluates faithfulness and relevance. Escalates to Support Agent if validation score falls below threshold (`0.70`).
+1. **Recovery Checkpoints & Extraction/Ingestion Split**:
+   - `complete.json` tracks ingested document IDs so ingestion can be resumed safely without redundant re-processing.
+2. **User Identity Guardrail (`who am i`)**:
+   - When asked *"who am i?"*, the Support Agent explicitly clarifies it does not have access to personal user data while introducing InSightDocs.
+3. **Out-of-Domain & Jailbreak Guardrails**:
+   - Non-technical queries (e.g., cooking, sports) or system prompt injection attempts are safely caught and guardrailed.
+4. **Dynamic Upload Safeguards**:
+   - Imposes configurable file size (20 MB) and page count (100 pages) limits during PDF ingestion.
+5. **Multimodal Visual Figures**:
+   - Automatically extracts figure diagrams (`page_N_figure_M.png`) and links them to answers when figure visual plots are requested.
 
 ---
 
-## Semantic FAQ Cache
+## 📖 Architectural Specifications
 
-- **Project-Specific Knowledge**: Dedicated strictly to answering questions about our system, InSightDocs (capabilities, supported file limits, architecture, API endpoints, and setup).
-- **Fast In-Memory Vector Search**: Pre-calculates dense vector embeddings of cached questions at startup for instant cosine similarity matching.
-- **Clean Data Storage (`data/faq.json`)**: Stores clean, human-readable Q&A records without raw float vectors on disk.
-- **Role Separation**: RAG handles technical paper domain queries, Support Agent handles greetings & fallbacks, and FAQ handles project-specific system questions. Dynamic auto-promotion of research paper/greeting queries has been removed.
-
----
-
-## Confidence Scoring & Fallback
-
-Configured in `utils/settings.py`:
-
-| Setting | Default | Action |
-|---|---|---|
-| `RETRIEVAL_CONFIDENCE_THRESHOLD` | `0.50` | Score `< 0.50` -> Escalates immediately to Support Agent |
-| `RETRIEVAL_SKIP_VALIDATION_THRESHOLD` | `0.80` | Score `≥ 0.80` -> Fast Path (skips LLM Validation Judge) |
-| `VALIDATION_CONFIDENCE_THRESHOLD` | `0.70` | Validation Score `< 0.70` -> Escalates to Support Agent |
-
----
-
-## Prompts
-
-Located in `prompts/prompts.py`:
-
-- **Generation Prompt**: Instructs LLM on structured multi-chunk synthesis, strict technical adherence, and citation formatting.
-- **Image Description Prompt**: 5-section visual breakdown (Type, Purpose, Structure, Key Details, Findings) for VLM figure extraction.
-- **Table Description Prompt**: Transforms Markdown tables into natural language preserving exact numerical metrics.
-- **Planner & Validation Prompts**: Structured JSON classification schemas for intent routing and faithfulness judging.
-
----
-
-## Testing & Verification
-
-Comprehensive automated unit and integration tests are available:
-
-```bash
-# Run all core safeguards, FAQ, and LangGraph workflow tests
-uv run pytest tests/test_domain_and_ingestion_safeguards.py tests/test_faq_agent.py tests/test_langgraph_workflow.py -v
-
-# Run full unit test suite
-uv run pytest tests/ -v
-```
-
-### Verified Safeguards Status
-- Greeting Guardrail: **PASSED ✅**
-- Out-of-Domain Denial: **PASSED ✅**
-- Tech Fallback Knowledge: **PASSED ✅**
-- Planner Agent LLM Router: **PASSED ✅**
-- Document Ingestion Safeguards: **PASSED ✅**
-
----
-
-## Configuration
-
-Maintained in `utils/settings.py`:
-
-| Property | Default Value | Description |
-|---|---|---|
-| `COLLECTION_NAME` | `insightdocs_demo_collection` | Qdrant default collection |
-| `EMBEDDING_MODEL_NAME` | `BAAI/bge-m3` | Vector embedding model |
-| `COHERE_EMBEDDING_MODEL` | `rerank-v3.5` | Cohere reranker model |
-| `MAX_FILE_SIZE_MB` | `10.0` | Ingestion file size limit |
-| `MAX_PAGE_COUNT` | `100` | Ingestion page count limit |
-| `VLM_PROVIDER` | `gemini` | Figure description VLM (`gemini` or `openai`) |
-
----
-
-## Data Directory Layout
-
-```
-data/
-├── faq.json                      # FAQ cache records
-├── uploads/
-│   └── <collection>/<file>.pdf   # Uploaded PDFs
-└── output/
-    ├── pdfs/<collection>/<doc>/  # Extracted manifests, images, and tables
-    ├── processing_status/        # Completed & incomplete document trackers
-    └── chat_conversations/       # Timestamped interaction & evaluation logs
-```
-
----
-
-## 📖 Detailed Codebase Documentation
-
-For design decisions, performance benchmarks, and detailed technical specifications, refer to:
-👉 **[Architecture and Design Documentation](file:///home/tanisha/Downloads/Simform/POC_MULTIMODAL_MULTIAGENT_RAG/Final_code/InSightDocs/docs/architecture_and_design.md)**
-
----
-
-## 🔮 Future Roadmap & Enhancements
-
-- [x] **Agentic Workflow Engine**: Stateful LangGraph multi-agent orchestration (`app/agents/graph.py`).
-- [x] **Semantic FAQ Caching**: High-performance semantic Q&A cache with dynamic promotion (`app/agents/faq_agent.py`).
-- [x] **Ingestion & Domain Safeguards**: Technical boundary validation & LLM paper domain checker (`app/ingestion/document_validator.py`).
-- [ ] **Asynchronous Task Queue**: Celery/Redis integration for high-concurrency PDF ingestion background processing.
-- [ ] **Multi-Collection Querying**: Simultaneous cross-collection search capabilities.
+For flowcharts, cloud topology, and ADRs, visit:
+👉 **[Architecture and Design Specifications](docs/architecture_and_design.md)**

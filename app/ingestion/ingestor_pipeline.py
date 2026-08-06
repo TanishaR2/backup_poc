@@ -44,7 +44,7 @@ def _is_meta_completed(workspace: Path) -> bool:
 
 
 def _should_skip_workspace(status_dir: Path, workspace: Path, collection_name: str, doc_id: str) -> bool:
-    return is_completed(status_dir, doc_id, collection_name) or _is_meta_completed(workspace)
+    return is_completed(status_dir, doc_id, collection_name)
 
 
 def _force_reset_workspace(

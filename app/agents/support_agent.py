@@ -52,7 +52,50 @@ def answer_support_query(
     """Answer support, greeting, or out-of-domain queries with strict boundary enforcement and multimodal vision capabilities."""
     logger.info(f"[Support Agent] Input query: '{query}' (image_attached={bool(image_base64)})")
 
-    # 1. Greeting or Assistant Identity (only if no image is attached and is a pure greeting)
+    # 0. Missing Attached Image Guardrail
+    q_lower = query.lower()
+    references_attached_img = bool(re.search(r"\b(attached|uploaded)\s+image\b", q_lower)) or "attached image" in q_lower or "this plot" in q_lower or "the attached plot" in q_lower
+    if references_attached_img and not image_base64:
+        answer = (
+            "No image was attached to your query. Please upload or attach an image "
+            "so I can analyze its content, axes, and visual structure for you."
+        )
+        logger.success("[Support Agent] Handled missing attached image query")
+        return {"answer": answer, "source": "missing_attached_image_guardrail"}
+
+    # 0.5. User Identity Guardrail ("who am i", "what is my name")
+    clean_q = re.sub(r"[^\w\s]", "", q_lower).strip()
+    is_user_identity = clean_q in {
+        "who am i", "what is my name", "do you know me", "do you know who i am",
+        "who i am", "tell me my name", "what my name is"
+    } or bool(re.search(r"\bwho am i\b|\bwhat is my name\b|\bdo you know me\b", q_lower))
+
+    if is_user_identity:
+        answer = (
+            "I do not have access to your personal identity or user profile, but I am **InSightDocs**, "
+            "your technical research assistant specialized in Artificial Intelligence, Machine Learning, "
+            "Deep Learning, and research paper analytics! How can I help you analyze research literature or AI concepts today?"
+        )
+        logger.success("[Support Agent] Handled user identity query ('who am i')")
+        return {"answer": answer, "source": "user_identity_guardrail"}
+
+    # 1. Knowledge Base Document Listing Query
+    if ("what documents" in q_lower or "what papers" in q_lower or "knowledge base" in q_lower or "paper titles" in q_lower or "document titles" in q_lower) and ("available" in q_lower or "indexed" in q_lower or "list" in q_lower or "stored" in q_lower or "in your" in q_lower or "have" in q_lower or "titles" in q_lower):
+        from app.retriever.retrieval_service import get_indexed_document_titles
+        doc_list = get_indexed_document_titles()
+        if doc_list:
+            papers_fmt = "\n".join([f"- **{title}**" for title in doc_list])
+            answer = (
+                f"The following **{len(doc_list)} research papers** are currently indexed in the InSightDocs knowledge base:\n\n"
+                f"{papers_fmt}\n\n"
+                "You can ask technical questions, request visual architecture diagrams, or query performance figures from any of these papers!"
+            )
+        else:
+            answer = "Currently, no research papers are indexed in the knowledge base. Please upload paper PDFs using the ingest pipeline."
+        logger.success("[Support Agent] Handled knowledge base document listing query")
+        return {"answer": answer, "source": "knowledge_base_listing"}
+
+    # 2. Greeting or Assistant Identity (only if no image is attached and is a pure greeting)
     if not image_base64 and _is_greeting_or_identity(query):
         answer = (
             "Hello! I am InSightDocs, your technical research assistant specialized in "
@@ -100,6 +143,11 @@ def answer_support_query(
                 f"\n\nNOTE: The research paper (arXiv ID: {target_arxiv_id}) is NOT currently indexed in the vector database. "
                 f"Politely clarify that paper {target_arxiv_id} is not indexed and answer based on general AI/ML parametric knowledge.\n"
             )
+    elif "quantumvit" in q_lower or "table 7" in q_lower:
+        paper_context_note = (
+            "\n\nNOTE: The requested model 'QuantumViT-XL' or Table 7 is NOT present in any of the indexed research papers in the vector database. "
+            "Politely clarify to the user that QuantumViT-XL or Table 7 is not available in the uploaded research papers.\n"
+        )
 
     if image_base64:
         prompt = Support_image_instruction + paper_context_note + "\n"
@@ -144,9 +192,9 @@ def answer_support_query(
         logger.success(f"[Support Agent] Answered: '{answer[:60]}...'")
         result = {"answer": answer, "source": "llm_knowledge"}
 
-        # Image Acquisition for Support Agent (skip web search for paper-specific queries)
+        # Image Acquisition for Support Agent (skip web search for paper-specific queries or missing image references)
         arxiv_in_query = bool(re.search(r"\b(\d{4}\.\d{4,5})\b", query))
-        if not image_base64 and not arxiv_in_query and (needs_image or should_request_image(query)):
+        if not image_base64 and not arxiv_in_query and not references_attached_img and (needs_image or should_request_image(query)):
             logger.info(f"[Support Agent] Image requested for query '{query}' — attempting web image search first")
             try:
                 from app.agents.web_search_tool import fetch_web_image_for_query

@@ -225,3 +225,6 @@ venv
 
 __pycache__
 output/
+
+groundtruth_evaluation/
+extra/

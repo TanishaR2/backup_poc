@@ -229,3 +229,32 @@ def retrieve(
     except Exception:
         logger.exception("Reranker failed; returning original hits")
     return hits, analysis
+
+
+def get_indexed_document_titles() -> list[str]:
+    """Scroll Qdrant collection with fast pagination to extract unique indexed research paper titles/filenames."""
+    try:
+        titles = set()
+        next_offset = None
+        for _ in range(3):
+            scrolled_hits, next_offset = qdrant_client.scroll(
+                collection_name=COLLECTION_NAME,
+                limit=500,
+                offset=next_offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for hit in scrolled_hits:
+                meta = (hit.payload or {}).get("metadata", {})
+                doc_name = meta.get("document_name") or meta.get("doc_id")
+                chunk_type = meta.get("chunk_type") or (hit.payload or {}).get("chunk_type")
+                if doc_name and chunk_type != "faq" and str(doc_name).lower() != "faq":
+                    clean_name = str(doc_name).replace(".pdf", "").strip()
+                    titles.add(clean_name)
+            if next_offset is None:
+                break
+        return sorted(list(titles))
+    except Exception as exc:
+        logger.warning(f"Failed to fetch indexed document titles from Qdrant: {exc}")
+        return []
+

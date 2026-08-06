@@ -259,10 +259,10 @@ YOUR TASKS:
    - NEVER set rewritten_query to 'Please upload an image' or similar statements when an image is attached.
 
 2. 'route':
-   - 'support': Greetings, casual chat, non-technical/out-of-domain questions, OR when the user attaches an external image file to analyze.
+   - 'support': Greetings, user identity questions ('who am i', 'what is my name', 'who are you'), casual chat, non-technical/out-of-domain questions, OR when the user attaches an external image file to analyze.
    - 'rag': Technical research paper questions, visual image/figure/diagram lookup requests for research papers, OR InSightDocs system FAQ / available document inquiries.
 3. 'scope':
-   - 'faq': Questions about InSightDocs system capabilities, available document titles/papers in knowledge base, architecture, vector DB, supported file formats, CLI commands, or FAQs.
+   - 'faq': Questions about InSightDocs system capabilities, available document titles/papers in knowledge base ('what documents are available', 'list paper titles'), architecture, vector DB, supported file formats, CLI commands, or FAQs.
    - 'documents': Specific technical questions about research papers, algorithms, equations, diagrams, or experiments.
 4. 'needs_image':
    - Analyze the SEMANTIC MEANING and INTENT of the query rather than relying on keyword matching.
@@ -276,8 +276,8 @@ YOUR TASKS:
    - false: If the query packs multiple unrelated questions into one.
 7. 'domain':
    - 'ai_ml_technical': For AI/ML/DL technical topics.
-   - 'greeting': For greetings or identity questions ('hello', 'who are you').
-   - 'project_faq': For InSightDocs system architecture, features, or capability questions.
+   - 'greeting': For greetings or identity questions ('hello', 'who are you', 'who am i', 'what is my name').
+   - 'project_faq': For InSightDocs system architecture, features, or capability questions ('what documents are available').
    - 'out_of_domain': For completely non-technical questions (sports, cooking, general knowledge).
 8. 'answer_length': Determine the appropriate response length based on the user's intent:
    - 'short': Quick factual lookups, yes/no questions, single-value retrieval (e.g. 'What is the accuracy?', 'What year was this published?').
