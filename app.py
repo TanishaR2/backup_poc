@@ -61,9 +61,11 @@ st.markdown(
     
     /* Display crisp intermediate-sized image without pixel stretching */
     [data-testid="stImage"] img {
-        max-width: 580px !important;
-        width: 60% !important;
+        max-width: 100% !important;
+        width: auto !important;
         height: auto !important;
+        max-height: 520px !important;
+        object-fit: contain !important;
         border-radius: 12px !important;
         box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25) !important;
         margin-top: 0.5rem !important;
@@ -202,9 +204,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Initialize Session State for Chat History
+# Initialize Session State for Chat History and Session ID
+import uuid
 if "messages" not in st.session_state:
     st.session_state.messages = []
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())[:8]
 
 # Sidebar Content
 with st.sidebar:
@@ -234,6 +239,22 @@ with st.sidebar:
                     st.error(f"Error connecting to backend: {e}")
                     
     st.markdown("---")
+    st.markdown("<h3 style='color: #c084fc; font-weight: 800; margin-bottom: 0.5rem;'>📚 Ingested Corpus</h3>", unsafe_allow_html=True)
+    try:
+        doc_resp = requests.get(f"{FASTAPI_URL}/documents", timeout=3)
+        if doc_resp.status_code == 200:
+            doc_data = doc_resp.json()
+            docs = doc_data.get("documents", {})
+            st.caption(f"Total Chunks Ingested: **{doc_data.get('total_chunks', 0)}**")
+            with st.expander(f"Uploaded Papers ({len(docs)})"):
+                for doc_name, count in docs.items():
+                    st.write(f"- **{doc_name[:35]}...** ({count} chunks)")
+        else:
+            st.caption("Could not list corpus documents.")
+    except Exception:
+        st.caption("Corpus document retrieval unavailable.")
+
+    st.markdown("---")
     st.markdown("<h3 style='color: #c084fc; font-weight: 800; margin-bottom: 0.5rem;'>⚙️ Backend Health</h3>", unsafe_allow_html=True)
     try:
         health_resp = requests.get(f"{FASTAPI_URL}/health", timeout=3)
@@ -243,6 +264,18 @@ with st.sidebar:
             st.markdown("🔴 **FastAPI Server**: Unreachable")
     except Exception:
         st.markdown("🔴 **FastAPI Server**: Offline")
+
+    st.markdown("---")
+    if st.session_state.messages:
+        import json as _json
+        chat_export = _json.dumps(st.session_state.messages, indent=2)
+        st.download_button(
+            label="📥 Export Chat Log (JSON)",
+            data=chat_export,
+            file_name=f"InSightDocs_chat_session_{st.session_state.session_id}.json",
+            mime="application/json",
+            use_container_width=True,
+        )
 
 # Main Interface
 st.markdown(
@@ -261,12 +294,22 @@ def _to_html(text: str) -> str:
     """Convert markdown text to clean HTML for rendering inside custom styled chat bubbles."""
     if not text:
         return ""
+    # Extract clean answer if text is wrapped in JSON
+    if isinstance(text, str) and text.strip().startswith("{") and '"answer"' in text:
+        try:
+            import json
+            parsed = json.loads(text)
+            if isinstance(parsed, dict) and "answer" in parsed:
+                text = parsed["answer"]
+        except Exception:
+            pass
+
+    # Strip any stray div tags from LLM or markdown artifacts
+    text = re.sub(r"</?div.*?>", "", str(text), flags=re.IGNORECASE).strip()
+
     def _normalize_latex(s: str) -> str:
-        # Remove stray escape before dollar signs (e.g. "\$\\rightarrow\$" -> "$\\rightarrow$")
         s = s.replace('\\$', '$')
-        # Common LaTeX macros -> Unicode for nicer inline rendering
         repl = {
-            '\\rightarrow': '→',
             '\\rightarrow': '→',
             '\\to': '→',
             '\\gamma': 'γ',
@@ -276,22 +319,26 @@ def _to_html(text: str) -> str:
             '\\top': '⊤',
             '\\alpha': 'α',
             '\\beta': 'β',
+            '\\cdot': '·',
+            '\\sqrt': '√',
+            '\\sum': '∑',
+            '\\hat': '^',
         }
         for k, v in repl.items():
             s = s.replace(k, v)
-        # Remove any remaining backslashes used for escaping in LLM output
-        s = s.replace('\\', '')
-        # Strip inline dollar math markers for plain rendering in the chat bubble
-        s = s.replace('$', '')
+        # Clean stray backslashes before plain letters
+        s = re.sub(r'\\([a-zA-Z])', r'\1', s)
         return s
+
     try:
         import markdown
         html = markdown.markdown(text, extensions=["tables", "fenced_code"])
+        html = re.sub(r"</?div.*?>", "", html, flags=re.IGNORECASE).strip()
         return _normalize_latex(html)
     except Exception:
-        # Robust pure-python fallback if markdown library is missing
         formatted = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
         formatted = formatted.replace('\n', '<br/>')
+        formatted = re.sub(r"</?div.*?>", "", formatted, flags=re.IGNORECASE).strip()
         return _normalize_latex(formatted)
 
 
@@ -358,7 +405,10 @@ with st.form("chat_form", clear_on_submit=True):
         # Call Backend
         with st.spinner("thinking..."):
             try:
-                data = {"query": user_query.strip()}
+                data = {
+                    "query": user_query.strip(),
+                    "session_id": st.session_state.session_id,
+                }
                 files = {}
                 if uploaded_image:
                     files["image"] = (uploaded_image.name, uploaded_image.getvalue(), uploaded_image.type)

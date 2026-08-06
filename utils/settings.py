@@ -17,7 +17,6 @@ GROQ_API_KEY2 = os.getenv("GROQ_API_KEY_2") or os.getenv("GROQ_API_KEY2")
 QDRANT_ENDPOINT = os.getenv("QDRANT_ENDPOINT")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
 
-COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
 
 AZURE_OPENAI_API_KEY_MINI = os.getenv("AZURE_OPENAI_API_KEY_MINI")
@@ -45,9 +44,8 @@ AZURE_OPENAI_5_4_KEY_ENV = (
 
 # --- GENERAL CONFIG ---
 COLLECTION_NAME = "InsightDocs"
-COHERE_EMBEDDING_MODEL = "rerank-v3.5"
 EMBEDDING_MODEL_NAME = "BAAI/bge-m3"
-RERANKER_NEEDED = False
+RERANKER_NEEDED = True
 vlm_provider = "azure_openai"
 
 # Minimal routing and confidence thresholds

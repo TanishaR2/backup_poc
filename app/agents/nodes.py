@@ -170,28 +170,77 @@ def generation_node(state: AgentState) -> dict:
 
 
 def validation_node(state: AgentState) -> dict:
-    """Evaluate generated answer using RAGAS-like metrics (faithfulness, relevancy, recall)."""
+    """Evaluate generated answer using RAGAS-like metrics (correctness, relevancy, completeness, image relevancy)."""
     query = state["query"]
     answer = state.get("answer", "")
-    logger.info(f"[Validation Node] Scoring answer for query: '{query[:60]}...'")
+    retrieved_image_path = state.get("retrieved_image_path")
+    logger.info(f"[Validation Node] Scoring answer for query: '{query[:60]}...' (retrieved_image_path={retrieved_image_path})")
 
     context_texts = []
+    image_descriptions = []
+
     for hit in state.get("retrieved_docs", []):
         if isinstance(hit, dict):
             payload = hit.get("payload", {})
         else:
             payload = getattr(hit, "payload", {}) or {}
-        metadata = payload.get("metadata", {})
+        metadata = payload.get("metadata", {}) or {}
         text = metadata.get("parent_text") or payload.get("text", "")
-        if text:
+        ctype = (metadata.get("chunk_type") or "").lower()
+        src = metadata.get("source_path") or ""
+
+        if ctype == "image" and src:
+            image_descriptions.append({
+                "source_path": src,
+                "description": text or metadata.get("caption") or "No description",
+            })
+        elif text:
             context_texts.append(text)
 
-    result = validate_answer(query, answer, context_texts)
+    # If an image was retrieved but no image chunks were in top-5 text context, fetch all image candidate descriptions from Qdrant
+    if retrieved_image_path and not image_descriptions:
+        try:
+            from utils.models_and_clients import qdrant_client
+            from utils.settings import COLLECTION_NAME
+            from qdrant_client.models import Filter, FieldCondition, MatchValue
+            from pathlib import Path
+
+            doc_folder = Path(retrieved_image_path).parent.parent.name
+            img_filter = Filter(must=[FieldCondition(key="metadata.chunk_type", match=MatchValue(value="image"))])
+            batch, _ = qdrant_client.scroll(
+                collection_name=COLLECTION_NAME,
+                scroll_filter=img_filter,
+                limit=50,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for pt in batch:
+                meta = (pt.payload or {}).get("metadata", {}) or {}
+                src = meta.get("source_path") or ""
+                text = (pt.payload or {}).get("text") or meta.get("parent_text") or ""
+                doc_id = str(meta.get("doc_id") or meta.get("document_name") or "")
+                if src and (doc_folder in src or doc_folder in doc_id):
+                    image_descriptions.append({
+                        "source_path": src,
+                        "description": text or f"Figure on page {meta.get('page_number', 'unknown')}",
+                    })
+        except Exception as exc:
+            logger.warning(f"[Validation Node] Could not fetch image descriptions from Qdrant: {exc}")
+
+    result = validate_answer(
+        query=query,
+        answer=answer,
+        context_chunks=context_texts,
+        retrieved_image_path=retrieved_image_path,
+        image_descriptions=image_descriptions,
+    )
 
     verdict = "PASSED" if result.get("passed") else "FAILED"
     score = result.get("score", 0.0)
-    logger.success(f"[Validation Node] Verdict: {verdict} | Score: {score:.3f}")
-    return {"validation": result}
+    val_img = result.get("validated_image_path") or retrieved_image_path
+
+    logger.success(f"[Validation Node] Verdict: {verdict} | Score: {score:.3f} | Validated Image: {val_img}")
+    return {"validation": result, "retrieved_image_path": val_img}
 
 
 def support_node(state: AgentState) -> dict:
@@ -240,9 +289,29 @@ def final_node(state: AgentState) -> dict:
     parsed = _extract_json_response(raw_answer)
     clean_answer = _clean_answer_text(parsed.get("answer", raw_answer))
 
-    logger.success(f"[Final Node] Answer finalized: '{clean_answer[:60]}...'")
+    # Extract structured citations from retrieved docs
+    citations = []
+    seen = set()
+    for hit in state.get("retrieved_docs", []):
+        if isinstance(hit, dict):
+            payload = hit.get("payload", {}) or {}
+        else:
+            payload = getattr(hit, "payload", {}) or {}
+        meta = payload.get("metadata", {}) or {}
+        doc_name = meta.get("document_name") or meta.get("doc_id")
+        page_num = meta.get("page_number")
+        chunk_id = meta.get("chunk_id")
+        if doc_name and chunk_id and chunk_id not in seen:
+            seen.add(chunk_id)
+            citations.append({
+                "document": doc_name,
+                "page": page_num,
+                "chunk_id": chunk_id,
+            })
 
-    assistant_msg = {"role": "assistant", "content": clean_answer}
+    logger.success(f"[Final Node] Answer finalized: '{clean_answer[:60]}...' | Citations: {len(citations)}")
+
+    assistant_msg = {"role": "assistant", "content": clean_answer, "citations": citations}
     if state.get("retrieved_image_path"):
         assistant_msg["image_path"] = state.get("retrieved_image_path")
 
@@ -253,5 +322,6 @@ def final_node(state: AgentState) -> dict:
 
     return {
         "final_answer": clean_answer,
+        "citations": citations,
         "chat_history": updated_history,
     }

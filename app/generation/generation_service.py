@@ -144,6 +144,7 @@ def generate_answer(
     }
     answer_length_instruction = _length_instructions.get(answer_length, _length_instructions["medium"])
 
+    hits = (hits or [])[:5]
     context_parts = []
     for rank, hit in enumerate(hits, start=1):
         metadata = hit.payload.get("metadata", {})

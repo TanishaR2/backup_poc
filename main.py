@@ -57,5 +57,5 @@ if __name__ == "__main__":
     # run_ingestion(str(output_dir), force=False)
     # logger.success("Ingestion completed successfully.")
 
-    # run_benchmark()
-    main()
+    run_benchmark()
+    # main()

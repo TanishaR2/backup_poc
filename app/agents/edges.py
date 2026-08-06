@@ -30,12 +30,17 @@ def route_after_retrieval(state: AgentState) -> str:
 def should_validate(state: AgentState) -> str:
     """Decide whether to run validation or skip it when confidence is high."""
     confidence = state.get("retrieval_confidence", 0.0)
-    # Skip validation for both user-uploaded images AND retrieved RAG images
-    has_image = bool(state.get("image_base64")) or bool(state.get("retrieved_image_path"))
+    has_user_uploaded_image = bool(state.get("image_base64"))
+    has_retrieved_rag_image = bool(state.get("retrieved_image_path"))
 
-    if confidence >= RETRIEVAL_SKIP_VALIDATION_THRESHOLD or has_image:
+    # Retrieved RAG images MUST execute multimodal image validation
+    if has_retrieved_rag_image:
+        logger.info("[Edge: should_validate] Retrieved RAG image present -> run multimodal image validation")
+        return "validate"
+
+    if confidence >= RETRIEVAL_SKIP_VALIDATION_THRESHOLD or has_user_uploaded_image:
         logger.info(
-            f"[Edge: should_validate] Confidence={confidence:.2f} or image={has_image} -> skip validation"
+            f"[Edge: should_validate] Confidence={confidence:.2f} or uploaded_image={has_user_uploaded_image} -> skip validation"
         )
         return "skip"
 
@@ -50,16 +55,19 @@ def route_after_validation(state: AgentState) -> str:
     validation = state.get("validation", {})
     passed = validation.get("passed", False)
     score = validation.get("score", 0.0)
-    answer = state.get("answer", "")
+    route = state.get("route", "")
 
-    # Fall back to Support Agent if validation failed and not a grounded page/figure mismatch answer
+    # RAG queries for research papers MUST ALWAYS complete at final node (never escalate RAG queries to Support Agent web search)
+    if route == "rag":
+        logger.info(f"[Edge: after_validation] RAG route (passed={passed}, score={score:.3f}) -> final")
+        return "final"
+
     if not passed:
-        if any(kw in answer.lower() for kw in ["not located on page", "not present on page", "not available on page", "appears on page", "is on page"]):
-            logger.info("[Edge: after_validation] Grounded figure/page mismatch response -> final")
-            return "final"
-
-        logger.warning(f"[Edge: after_validation] Validation FAILED / Context Missing (Score={score:.3f}) -> support agent fallback")
+        logger.warning(f"[Edge: after_validation] Support Validation FAILED (Score={score:.3f}) -> support agent retry")
         return "support"
+
+    logger.success(f"[Edge: after_validation] Score={score:.3f} PASSED -> final")
+    return "final"
 
     logger.success(f"[Edge: after_validation] Score={score:.3f} PASSED -> final")
     return "final"

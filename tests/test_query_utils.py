@@ -10,8 +10,9 @@ def test_normalize_query_text():
     assert normalize_query_text("Show teh image") == "Show the image"
 
 def test_should_request_image():
-    assert should_request_image("Show me an image of transformer architecture") is True
-    assert should_request_image("Give me the figure of accuracy curve") is True
+    # should_request_image is deprecated (always False), relying on Planner LLM needs_image
+    assert should_request_image("Show me an image of transformer architecture") is False
+    assert should_request_image("Give me the figure of accuracy curve") is False
     assert should_request_image("What is the definition of loss function?") is False
 
 def test_compute_retrieval_confidence():

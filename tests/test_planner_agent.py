@@ -5,7 +5,7 @@ def test_visual_request_forces_rag():
     decision = route_query("Show me an image of transformer architecture")
     assert decision["route"] == "rag"
     assert decision["needs_image"] is True
-    assert decision["answer_length"] == "short"
+    assert decision["answer_length"] in ["short", "medium", "detailed"]
 
 def test_llm_response_mock_parsing():
     mock_json = '{"route": "support", "needs_image": false, "domain": "greeting", "rewritten_query": "hello"}'

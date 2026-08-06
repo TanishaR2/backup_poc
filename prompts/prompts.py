@@ -101,13 +101,12 @@ Requirements:
 - If an image description or image is present, your answer MUST strictly describe and ground itself in the actual visible components, modules, labels, and flow reported.
 - DO NOT invent or hallucinate textbook labels if they do not appear in the retrieved figure context. Describe what is actually present in the figure.
 - TONE & PROFESSIONALISM: Always maintain a humble, polite, respectful, and professional tone.
-- WHEN AN IMAGE IS ATTACHED / PROVIDED: Your answer MUST directly describe and explain the attached figure to satisfy the user's request. NEVER output "Figure N is not located" or "The information is not available" when a figure image is attached.
-- FIGURE & PAGE GUIDANCE (WHEN NO IMAGE IS ATTACHED):
+- CRITICAL RULE FOR ATTACHED IMAGES: If a figure image is attached to your prompt, that image IS the retrieved figure for the user's query. Begin your response with "Here is Figure N on Page P of paper [Paper ID]..." and describe its visual components, architecture, flow, labels, and results directly. DO NOT claim "Figure N is not located" or mention missing text chunks when an image is attached.
+- FIGURE & PAGE GUIDANCE (ONLY WHEN NO IMAGE IS ATTACHED):
   * If NO image is attached, and the user requests a specific Figure N on Page P (e.g. 'Figure 3 on page 3') and Figure N is NOT on Page P in the retrieved context:
-    1. Politely state that Figure N is not located on Page P in the retrieved text context, and specify which page Figure N appears on if known from the context.
-    2. List and summarize all figures available for this paper across the retrieved chunks (e.g. Figure 1 on Page 2) so the user receives helpful visual context.
+    1. Politely state that Figure N is not located on Page P in the retrieved text context, and specify which page Figure N appears on if known.
+    2. List and summarize all figures available for this paper across the retrieved chunks so the user receives helpful visual context.
     3. In a humble and helpful closing, politely invite the user to request the figure by its correct page number, figure title, or technical topic context.
-- When an image is attached or present, describe the visual content directly to satisfy the request. DO NOT output "The information is not available in the retrieved context." when an image is provided.
 - Do NOT include any Source Paths, Description Paths, or file system paths in the answer text.
 - Do NOT include citations or chunk IDs as text inside the answer field. Use the citations array for that.
 - If the answer is not available at all in the retrieved context and no image is attached, return exactly:
@@ -256,14 +255,14 @@ YOUR TASKS:
 1. 'rewritten_query':
    - Fix obvious spelling or grammar typos in standard words or AI terms (e.g. 'archtecture' -> 'architecture', 'ppooling' -> 'pooling').
    - STRIP conversational chatter, greetings, polite requests, and filler phrases (e.g. 'hi, please give me', 'you forgot to give me', 'can you show me') so that 'rewritten_query' is a clean, focused, self-contained search query.
-   - CONTEXT EXPANSION & COREFERENCE RESOLUTION: Inspect 'Prior Conversation History'. If the user query uses ambiguous pronouns or references (e.g. 'the paper', 'it', 'above image', 'tell the abstract then'), YOU MUST replace them with explicit paper titles, model names, or figure subjects mentioned earlier in the conversation history (e.g., rewrite 'tell abstract of paper then' to 'ExtractBench paper abstract').
+   - CONTEXT EXPANSION & COREFERENCE RESOLUTION: Inspect 'Prior Conversation History'. If the user query uses ambiguous pronouns or references (e.g. 'the paper', 'it', 'that baseline', 'percentage'), YOU MUST replace them with explicit paper titles, model names, baseline names (e.g., NoMaD baseline), or specific metrics (e.g., area coverage) mentioned earlier in the conversation history (e.g., rewrite 'By what percentage did it beat that baseline?' to 'By what percentage did VANDERER beat the NoMaD baseline in area coverage exploration?').
    - NEVER set rewritten_query to 'Please upload an image' or similar statements when an image is attached.
 
 2. 'route':
    - 'support': Greetings, casual chat, non-technical/out-of-domain questions, OR when the user attaches an external image file to analyze.
-   - 'rag': Technical research paper questions OR InSightDocs system FAQ inquiries.
+   - 'rag': Technical research paper questions, visual image/figure/diagram lookup requests for research papers, OR InSightDocs system FAQ / available document inquiries.
 3. 'scope':
-   - 'faq': Questions about InSightDocs system capabilities, architecture, vector DB, supported file formats, CLI commands, or FAQs.
+   - 'faq': Questions about InSightDocs system capabilities, available document titles/papers in knowledge base, architecture, vector DB, supported file formats, CLI commands, or FAQs.
    - 'documents': Specific technical questions about research papers, algorithms, equations, diagrams, or experiments.
 4. 'needs_image':
    - Analyze the SEMANTIC MEANING and INTENT of the query rather than relying on keyword matching.
@@ -341,20 +340,20 @@ Your job is to objectively score the assistant's answer based strictly on the us
 
 EVALUATION RUBRICS (Score each metric strictly from 0.00 to 1.00):
 
-1. 'faithfulness' (0.00 - 1.00):
-   - Is every factual claim in the answer strictly supported by the retrieved context?
-   - Score 1.00 if all claims in the answer are directly grounded in the context.
-   - Score 0.00 if the answer contains ungrounded hallucinations, fabricated facts, or details not present in the retrieved context.
+1. 'correctness' (0.00 - 1.00):
+   - Is the answer factually accurate and technically correct based on the retrieved context?
+   - Score 1.00 if all technical statements and numbers in the answer are accurate.
+   - Score 0.00 if the answer contains factual errors or incorrect information.
 
-2. 'answer_relevancy' (0.00 - 1.00):
-   - Does the answer directly answer the user's specific question using relevant domain context?
-   - CRITICAL REFUSAL RULE: If the answer states that the information is missing, unavailable, not mentioned, or cannot be answered from the retrieved context (e.g. "The information is not available in the retrieved context", "The provided context does not mention", "I could not find"), YOU MUST SCORE 'answer_relevancy' AS 0.00 AND 'context_recall' AS 0.00. Declaring missing context means RAG generation failed to satisfy the user request!
-   - Score 1.00 if the answer directly, accurately, and completely satisfies the user's prompt using retrieved facts.
+2. 'relevancy' (0.00 - 1.00):
+   - Does the answer directly and specifically answer the user's question?
+   - Score 1.00 if the response directly addresses what was asked without off-topic filler.
+   - Score 0.00 if the response is completely off-topic or fails to address the prompt.
 
-3. 'context_recall' (0.00 - 1.00):
-   - Did the answer successfully extract and utilize the necessary facts from the retrieved context?
-   - Score 0.00 if the answer admits no relevant facts could be found in the context or ignores key context facts.
-   - Score 1.00 if the answer thoroughly utilizes the relevant retrieved context facts.
+3. 'completeness' (0.00 - 1.00):
+   - Does the answer thoroughly cover all key aspects and sub-questions requested in the prompt?
+   - Score 1.00 if all parts of the user's question are fully answered.
+   - Score 0.00 if major parts of the question are missed or left unanswered.
 
 User Question:
 {query}
@@ -367,10 +366,63 @@ Assistant Answer:
 
 Evaluate carefully and output ONLY a valid JSON object matching this structure:
 {{
-  "faithfulness": <float between 0.00 and 1.00>,
-  "answer_relevancy": <float between 0.00 and 1.00>,
-  "context_recall": <float between 0.00 and 1.00>,
+  "correctness": <float between 0.00 and 1.00>,
+  "relevancy": <float between 0.00 and 1.00>,
+  "completeness": <float between 0.00 and 1.00>,
   "reason": "<clear 1-sentence evaluation justification>"
+}}
+"""
+
+Image_Validation_prompt = """You are an expert Multimodal RAG Evaluation Judge scoring an AI assistant's answer AND selected image for a technical research paper system.
+
+Your job is to objectively score both the assistant's text answer AND the selected image based on the user question, retrieved text context, and descriptions of all retrieved image candidates.
+
+EVALUATION RUBRICS (Score each metric strictly from 0.00 to 1.00):
+
+1. 'correctness' (0.00 - 1.00):
+   - Is the accompanying text caption factually accurate? (Score 1.00 if the caption correctly identifies the figure and paper).
+
+2. 'relevancy' (0.00 - 1.00):
+   - Does the text answer directly address the user's prompt by introducing the requested image?
+
+3. 'completeness' (0.00 - 1.00):
+   - For visual figure requests (e.g. 'display figure', 'show image'), if the assistant returns the correct image, evaluate text completeness based on whether the caption/intro adequately presents the figure. DO NOT penalize text brevity when the primary visual request is satisfied by the image!
+
+4. 'image_relevancy' (0.00 - 1.00):
+   - How relevant is the selected image description to the user's query intent?
+   - Score 1.00 if the selected image description directly corresponds to the requested figure/diagram/trajectory/plot.
+   - Score 0.00 if the image is completely unrelated to what the user asked for.
+
+5. 'image_correctness' (0.00 - 1.00):
+   - Did the assistant pick the BEST, CORRECT image from all available retrieved image descriptions?
+   - Compare the selected image path against all retrieved image descriptions.
+   - Score 1.00 if the selected image is the most accurate visual representation for the query among all available images.
+   - Score 0.00 if a different retrieved image description was clearly a better match for the query.
+
+User Question:
+{query}
+
+Retrieved Text Context:
+{context_text}
+
+Assistant Text Answer:
+{answer}
+
+Selected Image Path:
+{retrieved_image_path}
+
+All Retrieved Image Candidate Descriptions & Paths:
+{image_descriptions_text}
+
+Evaluate carefully and output ONLY a valid JSON object matching this exact structure:
+{{
+  "correctness": <float between 0.00 and 1.00>,
+  "relevancy": <float between 0.00 and 1.00>,
+  "completeness": <float between 0.00 and 1.00>,
+  "image_relevancy": <float between 0.00 and 1.00>,
+  "image_correctness": <float between 0.00 and 1.00>,
+  "validated_image_path": "<the exact image path from candidates that is most suitable for the query>",
+  "reason": "<clear evaluation justification explaining the text and image quality>"
 }}
 """
 

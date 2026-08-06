@@ -162,23 +162,61 @@ def select_relevant_image_path(query: str, hits: Iterable[Any], needs_image: boo
                 best = img_candidates[0]
                 # score > 0 means page matched; ≤ 0 means that page doesn't exist in doc
                 return resolve_existing_image_path(best["source_path"]) if best["score"] > 0 else None
-
+            else:
+                return None
         except Exception:
-            pass
+            return None
 
-    # ── B. Keyword overlap fallback (no paper ID in query) ────────────────────
+def select_relevant_image_path(query: str, hits: list[Any], needs_image: bool = False) -> str | None:
+    """Select the best matching image file path for a query strictly scoped to the primary document."""
+    from utils.logger_config import logger
+    
+    if not needs_image and not any(w in query.lower() for w in ["figure", "fig", "diagram", "image", "plot", "trajectory"]):
+        return None
+
     stop_words = {
-        "the", "this", "that", "these", "those", "show", "me", "what", "is", "are", "a", "an", "of", "for",
-        "can", "you", "display", "illustrate", "visualize", "figure", "fig", "diagram",
-        "chart", "plot", "image", "picture", "photo", "in", "on", "at", "to", "with", "and", "or",
-        "give", "get", "send", "provide", "fetch", "find", "look", "view", "return", "about",
-        "please", "tell", "want", "same", "also", "explain", "page", "paper",
+        "the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
+        "in", "on", "at", "to", "for", "with", "about", "against", "between",
+        "into", "through", "during", "before", "after", "above", "below", "from",
+        "up", "down", "in", "out", "on", "off", "over", "under", "again", "further",
+        "then", "once", "here", "there", "when", "where", "why", "how", "all", "any",
+        "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor",
+        "not", "only", "own", "same", "so", "than", "too", "very", "can", "will",
+        "just", "don", "should", "now", "show", "display", "illustrate", "visualize",
+        "figure", "fig", "diagram", "chart", "plot", "image", "picture", "photo",
+        "give", "get", "send", "provide", "fetch", "find", "look", "view", "return",
+        "please", "tell", "want", "paper", "page", "actual", "from", "and", "or"
     }
+
     query_terms = {
         w for w in re.findall(r"[a-z0-9]+", query.lower())
         if w not in stop_words and len(w) >= 2
     }
 
+    # 1. Establish primary_doc_id strictly from Rank 1 hit or explicit doc title match in query
+    primary_doc_id = None
+    target_page_from_text = None
+
+    if hits:
+        top_hit = hits[0]
+        _, top_meta = _extract_hit_context(top_hit)
+        primary_doc_id = str(top_meta.get("doc_id") or top_meta.get("document_name") or "")
+        target_page_from_text = top_meta.get("page_number")
+
+        for hit in hits:
+            text, metadata = _extract_hit_context(hit)
+            doc_id = str(metadata.get("doc_id") or metadata.get("document_name") or "")
+            if not doc_id:
+                continue
+            doc_terms = set(re.findall(r"[a-z0-9]+", doc_id.lower())) - stop_words
+            if query_terms & doc_terms:
+                primary_doc_id = doc_id
+                target_page_from_text = metadata.get("page_number")
+                break
+
+    logger.info(f"[Image Selection] Primary Document ID: '{primary_doc_id}' | Target Page: {target_page_from_text}")
+
+    # 2. Collect image candidates strictly matching primary_doc_id
     candidates: list[dict] = []
 
     if hits:
@@ -190,21 +228,68 @@ def select_relevant_image_path(query: str, hits: Iterable[Any], needs_image: boo
             if not source_path:
                 continue
 
-            text_terms = set(re.findall(r"[a-z0-9]+", text.lower()))
-            overlap    = len(query_terms & text_terms) if query_terms else 1
+            doc_id = str(metadata.get("doc_id") or metadata.get("document_name") or "")
+            # STRICT FILTER: Discard images from non-matching papers!
+            if primary_doc_id and (primary_doc_id not in doc_id and doc_id not in primary_doc_id):
+                logger.debug(f"[Image Selection] Rejecting image from non-primary paper: '{doc_id}'")
+                continue
 
-            specific_models = {"rnn", "lstm", "gru", "transformer", "cross", "bert", "gpt", "resnet", "vgg", "unet", "diffusion"}
-            if query_terms & specific_models and not (text_terms & (query_terms & specific_models)):
-                overlap = 0
+            text_terms = set(re.findall(r"[a-z0-9]+", text.lower())) - stop_words
+            overlap = len(query_terms & text_terms) if query_terms else 1
 
             score = float(metadata.get("rerank_score") or getattr(hit, "score", 0.0) or 0.0)
+            if target_page_from_text and metadata.get("page_number") == target_page_from_text:
+                score += 50.0
+
             candidates.append({"source_path": source_path, "overlap": overlap, "score": score})
 
-    valid = [c for c in candidates if c["overlap"] > 0]
-    if not valid:
-        return None
-    valid.sort(key=lambda x: (-x["overlap"], -x["score"]))
-    return valid[0]["source_path"]
+    if candidates:
+        candidates.sort(key=lambda x: (-x["overlap"], -x["score"]))
+        selected = resolve_existing_image_path(candidates[0]["source_path"])
+        logger.info(f"[Image Selection] Selected candidate from hits: '{selected}'")
+        return selected
+
+    # 3. Fallback: Scroll Qdrant for image chunks belonging strictly to primary_doc_id
+    if primary_doc_id:
+        try:
+            from utils.models_and_clients import qdrant_client
+            from utils.settings import COLLECTION_NAME
+            from qdrant_client.models import Filter, FieldCondition, MatchValue
+
+            img_filter = Filter(must=[FieldCondition(key="metadata.chunk_type", match=MatchValue(value="image"))])
+            batch, _ = qdrant_client.scroll(
+                collection_name=COLLECTION_NAME,
+                scroll_filter=img_filter,
+                limit=100,
+                with_payload=True,
+                with_vectors=False,
+            )
+            doc_img_candidates = []
+            for pt in batch:
+                meta = (pt.payload or {}).get("metadata", {}) or {}
+                doc_id = str(meta.get("doc_id") or meta.get("document_name") or "")
+                src = meta.get("source_path") or ""
+                text = (pt.payload or {}).get("text") or meta.get("parent_text") or ""
+                if src and (primary_doc_id in doc_id or doc_id in primary_doc_id):
+                    page_num = meta.get("page_number")
+                    page_bonus = 50.0 if (target_page_from_text and page_num == target_page_from_text) else 0.0
+                    text_terms = set(re.findall(r"[a-z0-9]+", (text + " " + str(src)).lower())) - stop_words
+                    overlap = len(query_terms & text_terms) if query_terms else 1
+                    doc_img_candidates.append({
+                        "source_path": src,
+                        "overlap": overlap,
+                        "score": page_bonus + overlap * 5.0,
+                    })
+
+            if doc_img_candidates:
+                doc_img_candidates.sort(key=lambda x: (-x["overlap"], -x["score"]))
+                selected = resolve_existing_image_path(doc_img_candidates[0]["source_path"])
+                logger.info(f"[Image Selection] Selected candidate from Qdrant scroll: '{selected}'")
+                return selected
+        except Exception as exc:
+            logger.warning(f"[Image Selection] Qdrant scroll fallback failed: {exc}")
+
+    return None
 
 
 def generate_support_diagram_image(query: str) -> str | None:

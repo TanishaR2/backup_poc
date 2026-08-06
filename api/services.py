@@ -224,6 +224,8 @@ def run_query(query: str, image_base64: str = None, session_id: str = "default")
         if retrieved_image_path and not Path(retrieved_image_path).exists():
             retrieved_image_path = None
 
+    citations = result.get("citations", [])
+
     record = {
         "timestamp": datetime.now().isoformat(),
         "query": query,
@@ -235,9 +237,10 @@ def run_query(query: str, image_base64: str = None, session_id: str = "default")
         "retrieval_confidence": retrieval_confidence,
         "retrieved_image_path": retrieved_image_path,
         "chunks": chunks,
+        "citations": citations,
         "latency": latency,
     }
-    logger.info(f"[API] retrieved_image_path before return: {retrieved_image_path}")
+    logger.info(f"[API] retrieved_image_path before return: {retrieved_image_path} | citations: {len(citations)}")
     return record
 
 

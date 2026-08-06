@@ -10,8 +10,6 @@ from groq import Groq
 from openai import AzureOpenAI, OpenAI
 from FlagEmbedding import BGEM3FlagModel
 from qdrant_client import QdrantClient
-from cohere import Client as CohereClient
-
 from utils.logger_config import logger
 from utils.settings import (
     AZURE_OPENAI_API_KEY_MINI,
@@ -22,7 +20,6 @@ from utils.settings import (
     AZURE_OPENAI_MODEL_API_KEY_5_4,
     AZURE_OPENAI_MODEL_NAME_5_4,
     AZURE_OPENAI_MODEL_VERSION_5_4,
-    COHERE_API_KEY,
     EMBEDDING_MODEL_NAME,
     GOOGLE_API_KEY,
     GROQ_API_KEY,
@@ -61,14 +58,11 @@ try:
 except Exception:
     groq_client = None
 
-# Embedding Model
+# Embedding & Reranking Model (BGE-M3 Native Multi-Vector)
 embedding_model = BGEM3FlagModel(EMBEDDING_MODEL_NAME, use_fp16=True)
 
 # Vector DB Client
 qdrant_client = QdrantClient(api_key=QDRANT_API_KEY, url=QDRANT_ENDPOINT, timeout=60.0)
-
-# Reranker Client
-co = CohereClient(COHERE_API_KEY)
 
 
 # --- DYNAMIC CLIENT CACHE ---

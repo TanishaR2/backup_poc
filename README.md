@@ -53,6 +53,7 @@ Key capabilities:
 - **Hybrid Retrieval & Reranking** — Dense + sparse BGE-M3 embeddings merged with RRF (Reciprocal Rank Fusion) and reranked using Cohere `rerank-v3.5`.
 - **Confidence-Gated Validation & Escalation** — RAGAS-based answer faithfulness and relevancy judge gates final answers, falling back to Support Agent + Web Search when context confidence is low.
 - **Multi-Provider Failover** — Resilient LLM failover order: Groq → Google Gemini → Azure OpenAI.
+- **Strict Targeted RAG Image Selection & Grounding** — Filtered Qdrant payload scanning with strict page/figure hard-rejection, base64 VLM visual grounding, and humble, professional response formatting listing available paper figures.
 - **Interactive UI & REST API** — Streamlit app with step-by-step Flow Trace Reports and FastAPI web server.
 
 ---

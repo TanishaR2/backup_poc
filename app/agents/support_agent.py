@@ -144,8 +144,9 @@ def answer_support_query(
         logger.success(f"[Support Agent] Answered: '{answer[:60]}...'")
         result = {"answer": answer, "source": "llm_knowledge"}
 
-        # Image Acquisition for Support Agent
-        if not image_base64 and (needs_image or should_request_image(query)):
+        # Image Acquisition for Support Agent (skip web search for paper-specific queries)
+        arxiv_in_query = bool(re.search(r"\b(\d{4}\.\d{4,5})\b", query))
+        if not image_base64 and not arxiv_in_query and (needs_image or should_request_image(query)):
             logger.info(f"[Support Agent] Image requested for query '{query}' — attempting web image search first")
             try:
                 from app.agents.web_search_tool import fetch_web_image_for_query
