@@ -7,7 +7,6 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from .schemas import HealthResponse, IngestUploadResponse, QueryResponse
 from .services import run_query, save_and_ingest_pdf
 from utils.logger_config import logger
-from utils.settings import COLLECTION_NAME
 
 router = APIRouter()
 
@@ -21,7 +20,7 @@ def health() -> HealthResponse:
 @router.post("/ingest", response_model=IngestUploadResponse)
 async def ingest(
     file: UploadFile = File(...),
-    collection_name: str = Form(default=COLLECTION_NAME),
+    collection_name: str = Form(default="InsightDocs"),
     force: bool = Form(default=False),
 ) -> IngestUploadResponse:
     """Upload a PDF and ingest it: save → extract → embed → Qdrant."""
@@ -97,24 +96,3 @@ async def query(
         retrieved_image_path=result.get("retrieved_image_path"),
     )
 
-
-@router.get("/documents")
-def list_documents(collection_name: str = COLLECTION_NAME) -> dict:
-    """List unique documents and chunk counts in Qdrant collection."""
-    try:
-        from utils.models_and_clients import qdrant_client
-        batch, _ = qdrant_client.scroll(
-            collection_name=collection_name,
-            limit=500,
-            with_payload=True,
-            with_vectors=False,
-        )
-        docs = {}
-        for pt in batch:
-            meta = (pt.payload or {}).get("metadata", {}) or {}
-            doc_name = meta.get("document_name") or meta.get("doc_id") or "Unknown"
-            docs[doc_name] = docs.get(doc_name, 0) + 1
-        return {"collection": collection_name, "documents": docs, "total_chunks": len(batch)}
-    except Exception as exc:
-        logger.error(f"Failed to list documents: {exc}")
-        return {"collection": collection_name, "documents": {}, "total_chunks": 0}

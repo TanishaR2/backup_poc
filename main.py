@@ -7,8 +7,6 @@ from app.generation.generation_service import qna
 
 from utils.logger_config import logger
 from utils.settings import COLLECTION_NAME
-
-from scripts.test_10_queries import main
 project_root = Path(__file__).resolve().parent
 
 input_dir = project_root / "data" / "pdf"

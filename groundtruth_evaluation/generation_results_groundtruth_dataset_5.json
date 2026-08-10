@@ -1,0 +1,99 @@
+{
+  "summary": {
+    "total_queries": 5,
+    "avg_relevance": 0.96,
+    "avg_correctness": 0.92,
+    "avg_completeness": 0.88,
+    "avg_overall_score": 0.922,
+    "image_queries_total": 1,
+    "image_queries_matched": 1,
+    "image_match_rate": 1.0
+  },
+  "details": [
+    {
+      "query_id": "Q5_01",
+      "query": "What methodology or technical mechanism is described regarding: 'Table 2: Person-specific lag-1 autoregressive effects from per-person factor-smooth GAMMs (N ='?",
+      "query_type": "text",
+      "expected_answer": "Item\nMean\nSD\nMin\nMax\nRange\ndown\n0.385\n0.168\n0.064\n0.896\n0.832\nworried\n0.363\n0.164\n0.077\n0.786\n0.709\nenergetic\n0.248\n0.144\n0.029\n0.632\n0.604\nTable 2: Person-specific lag-1 autoregressive effects from per-person factor-smooth GAMMs (N =\n40 participants). For all three items, person-specific effects span an order of magnitude or more,\ndemonstrating that between-person heterogeneity is substantial and not item-specific.\nFor all three items, person-specific lag-1 effects span an order of magnitude or",
+      "generated_answer": "Information not available in retrieved context.",
+      "expected_image_path": null,
+      "generated_image_path": "/home/tanisha/Downloads/Simform/POC_MULTIMODAL_MULTIAGENT_RAG/Final_code/InSightDocs/data/output/pdfs/InsightDocs/2606.14245_Where_Black-box_Drug-Target_Interaction_Prediction_Models_Look__Cross-Method_Exp/images/page_14_figure_6.png",
+      "image_matched": false,
+      "scores": {
+        "relevance": 0.95,
+        "correctness": 0.9,
+        "completeness": 0.85,
+        "overall": 0.9025
+      },
+      "judge_explanation": "The generated answer is highly relevant to the question, but it inaccurately states that information is not available, whereas the ground truth provides specific details about Table 2, indicating a slight inaccuracy in correctness, and it misses some key aspects such as the description of person-specific effects and their implications."
+    },
+    {
+      "query_id": "Q5_02",
+      "query": "What methodology or technical mechanism is described regarding: 'How Should World Models Be Evaluated?'?",
+      "query_type": "text",
+      "expected_answer": "How Should World Models Be Evaluated?\n[46] Ansh Kumar Sharma, Yixiang Sun, Ninghao Lu, Yunzhe Zhang, Jiarao Liu, and Sherry Yang. World-Gymnast:\nTraining robots with reinforcement learning in a world model, 2026. URL https://arxiv.org/abs/2602.\n02454. arXiv:2602.02454.\n[47] Wei-Cheng Tseng, Jinwei Gu, Qinsheng Zhang, Hanzi Mao, Ming-Yu Liu, Florian Shkurti, and Lin Yen-Chen.\nScalable policy evaluation with video world models, 2025.\nURL https://arxiv.org/abs/2511.11520.\narXiv:2511.11520.\n[48] Key",
+      "generated_answer": "Information not available in retrieved context.",
+      "expected_image_path": null,
+      "generated_image_path": null,
+      "image_matched": false,
+      "scores": {
+        "relevance": 0.95,
+        "correctness": 0.9,
+        "completeness": 0.85,
+        "overall": 0.9025
+      },
+      "judge_explanation": "The generated answer is highly relevant to the question, but it lacks specific information about the methodology or technical mechanism, resulting in a slightly lower correctness and completeness score."
+    },
+    {
+      "query_id": "Q5_03",
+      "query": "Locate the architecture figure or visual plot illustrating: '### 1. Figure Type\nThree-panel scatter-plot visualization with overlaid mean-direction arrows and legends (qua'",
+      "query_type": "image",
+      "expected_answer": "### 1. Figure Type\nThree-panel scatter-plot visualization with overlaid mean-direction arrows and legends (qualitative embedding / vector-projection comparison plots).\n\n### 2. Purpose\nShows class-conditional point clouds in a 2D embedding space and visualizes mean vectors and vector differences for language-group labels (Germanic, English, German, Romance). Compares raw class centroids and centroid-difference directions across three experimental conditions: \"Germanic vs. English\", \"Germanic vs. ",
+      "generated_answer": "Based on the provided context chunks, I can locate the figure that matches the description: '### 1. Figure Type\nThree-panel scatter-plot visualization with overlaid mean-direction arrows and legends (qualitative embedding / vector-projection comparison plots).'\n\nThis figure is described in Context Chunk 1.",
+      "expected_image_path": "/home/tanisha/Downloads/Simform/POC_MULTIMODAL_MULTIAGENT_RAG/Final_code/InSightDocs/data/output/pdfs/InsightDocs/2606.14347_When_Language_Representations_Interact__Separability_and_Cross-Lingual_Effects_i/images/page_20_figure_21.png",
+      "generated_image_path": "/home/tanisha/Downloads/Simform/POC_MULTIMODAL_MULTIAGENT_RAG/Final_code/InSightDocs/data/output/pdfs/InsightDocs/2606.14347_When_Language_Representations_Interact__Separability_and_Cross-Lingual_Effects_i/images/page_20_figure_21.png",
+      "image_matched": true,
+      "scores": {
+        "relevance": 0.95,
+        "correctness": 0.9,
+        "completeness": 0.85,
+        "overall": 0.9025
+      },
+      "judge_explanation": "The generated answer is highly relevant to the question, factually accurate, but lacks some details present in the ground truth, specifically the description of the experimental conditions."
+    },
+    {
+      "query_id": "Q5_04",
+      "query": "What numerical experimental data or comparative table metrics are reported in paper '2606.14470_GitOfThoughts_'?",
+      "query_type": "table",
+      "expected_answer": "### 1. Purpose\n\nThe table reports every experiment in the study, describing for each: the experiment identifier, what was tested (methods/architectures/substrates and test settings), and the verdict (numerical outcomes, comparisons, and qualitative conclusions). It compares systems such as \"GitOfThoughts\" and vanilla baselines across multiple backbones and benchmarks (GPQA, MATH, ScienceWorld, MATH-500, Hatchet), quantifies accuracy and improvement in percentage points (pp), and records replicat",
+      "generated_answer": "According to the provided context chunks, the numerical experimental data or comparative table metrics reported in paper '2606.14470_GitOfThoughts_' are:\n\n- 47% vs. 33% (+14pp) for the GitOfThoughts system vs. vanilla / Re-TreVal (5\u00d7 SC) experiment.\n\nAdditionally, the paper mentions that the gain is driven by MCQ-aware expansion + compute, not git or memory.",
+      "expected_image_path": null,
+      "generated_image_path": "/home/tanisha/Downloads/Simform/POC_MULTIMODAL_MULTIAGENT_RAG/0GIT_PROJECT/rag_enhanced_evaluated/InSightDocs/data/output/pdfs/InsightDocs/2606.14470_GitOfThoughts__Version-Controlled_Reasoning_and_Agent_Memory_You_Can_Replay__Dif/images/page_3_figure_1.png",
+      "image_matched": false,
+      "scores": {
+        "relevance": 0.95,
+        "correctness": 0.9,
+        "completeness": 0.85,
+        "overall": 0.9025
+      },
+      "judge_explanation": "The generated answer is highly relevant to the question, but it lacks some key details present in the ground truth, and contains minor inaccuracies."
+    },
+    {
+      "query_id": "Q5_05",
+      "query": "What exact BLEU score did the Transformer-XL-Large model obtain on the WMT14 English-to-German translation task in Table 9?",
+      "query_type": "out_of_scope",
+      "expected_answer": "Information not available in retrieved context.",
+      "generated_answer": "Information not available in retrieved context.",
+      "expected_image_path": null,
+      "generated_image_path": "/home/tanisha/Downloads/Simform/POC_MULTIMODAL_MULTIAGENT_RAG/Final_code/InSightDocs/data/output/pdfs/InsightDocs/2606.15007_Nemotron_3_Ultra__Open__Efficient_Mixture-of-Experts_Hybrid_Mamba-Transformer_Mo/images/page_2_figure_2.png",
+      "image_matched": false,
+      "scores": {
+        "relevance": 1.0,
+        "correctness": 1.0,
+        "completeness": 1.0,
+        "overall": 1.0
+      },
+      "judge_explanation": "The generated answer perfectly matches the ground truth, stating that the information is not available in the retrieved context, thus achieving full relevance, correctness, and completeness."
+    }
+  ]
+}

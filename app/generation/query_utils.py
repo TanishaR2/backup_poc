@@ -171,7 +171,7 @@ def select_relevant_image_path(query: str, hits: list[Any], needs_image: bool = 
     """Select the best matching image file path for a query strictly scoped to the primary document."""
     from utils.logger_config import logger
     
-    if not needs_image and not any(w in query.lower() for w in ["figure", "fig", "diagram", "image", "plot", "trajectory"]):
+    if not needs_image:
         return None
 
     stop_words = {

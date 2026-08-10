@@ -105,12 +105,9 @@ def validate_answer(
             img_corr = float(parsed.get("image_correctness", 1.0) if has_image_validation else 1.0)
 
             if has_image_validation:
-                if img_corr >= 0.70 and img_rel >= 0.60:
-                    text_score = (correctness + relevancy + completeness) / 3.0
-                    img_score = (img_corr + img_rel) / 2.0
-                    score = 0.65 * img_score + 0.35 * max(text_score, 0.75)
-                else:
-                    score = (correctness + relevancy + completeness + img_rel + img_corr) / 5.0
+                text_score = (correctness + relevancy + completeness) / 3.0
+                img_score = (img_corr + img_rel) / 2.0
+                score = 0.70 * text_score + 0.30 * img_score
             else:
                 score = (correctness + relevancy + completeness) / 3.0
 

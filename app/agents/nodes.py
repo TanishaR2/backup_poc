@@ -111,9 +111,7 @@ def retrieval_node(state: AgentState) -> dict:
 
     confidence = compute_retrieval_confidence(hits)
 
-    needs_img = bool(state.get("needs_image_in_answer")) or any(
-        w in query.lower() for w in ["figure", "diagram", "image", "illustration", "architecture", "plot", "schematic", "page"]
-    )
+    needs_img = bool(state.get("needs_image_in_answer"))
     selected_img_path = None
     if needs_img:
         from app.generation.query_utils import select_relevant_image_path

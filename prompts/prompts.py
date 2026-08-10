@@ -101,7 +101,7 @@ Requirements:
 - If an image description or image is present, your answer MUST strictly describe and ground itself in the actual visible components, modules, labels, and flow reported.
 - DO NOT invent or hallucinate textbook labels if they do not appear in the retrieved figure context. Describe what is actually present in the figure.
 - TONE & PROFESSIONALISM: Always maintain a humble, polite, respectful, and professional tone.
-- CRITICAL RULE FOR ATTACHED IMAGES: If a figure image is attached to your prompt, that image IS the retrieved figure for the user's query. Begin your response with "Here is Figure N on Page P of paper [Paper ID]..." and describe its visual components, architecture, flow, labels, and results directly. DO NOT claim "Figure N is not located" or mention missing text chunks when an image is attached.
+- MULTIMODAL EVIDENCE INTEGRATION: If an image or figure description is present in the context, integrate its insights naturally with the text evidence to directly answer the user's prompt. Answer the user's technical question first and foremost. Do NOT force rigid intro headers like "Here is Figure N..." unless the user specifically requested to display or present that figure.
 - FIGURE & PAGE GUIDANCE (ONLY WHEN NO IMAGE IS ATTACHED):
   * If NO image is attached, and the user requests a specific Figure N on Page P (e.g. 'Figure 3 on page 3') and Figure N is NOT on Page P in the retrieved context:
     1. Politely state that Figure N is not located on Page P in the retrieved text context, and specify which page Figure N appears on if known.
@@ -380,13 +380,13 @@ Your job is to objectively score both the assistant's text answer AND the select
 EVALUATION RUBRICS (Score each metric strictly from 0.00 to 1.00):
 
 1. 'correctness' (0.00 - 1.00):
-   - Is the accompanying text caption factually accurate? (Score 1.00 if the caption correctly identifies the figure and paper).
+   - Is the text answer factually accurate based on the retrieved context? (Score 1.00 if all statements are accurate).
 
 2. 'relevancy' (0.00 - 1.00):
-   - Does the text answer directly address the user's prompt by introducing the requested image?
+   - Does the text answer directly address the user's question?
 
 3. 'completeness' (0.00 - 1.00):
-   - For visual figure requests (e.g. 'display figure', 'show image'), if the assistant returns the correct image, evaluate text completeness based on whether the caption/intro adequately presents the figure. DO NOT penalize text brevity when the primary visual request is satisfied by the image!
+   - Does the answer thoroughly address all core aspects of the user's prompt?
 
 4. 'image_relevancy' (0.00 - 1.00):
    - How relevant is the selected image description to the user's query intent?

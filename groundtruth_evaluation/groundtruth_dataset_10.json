@@ -1,0 +1,92 @@
+[
+  {
+    "query_id": "Q10_01",
+    "query": "What concept or methodology is explained in relation to: 'Conformal Candidate Certification for Offline Model-Based Optimization'?",
+    "query_type": "text",
+    "expected_doc_id": "2606.15217_Conformal_Candidate_Certification_for_Offline_Model-Based_Optimization",
+    "expected_chunk_type": "text",
+    "expected_answer": "Conformal Candidate Certification for Offline Model-Based Optimization\nSeungjin Choi 1\nAbstract\nOffline model-based optimization (MBO) pro-\nposes candidates by optimizing a surrogate trained\non a fixed historical dataset.\nBecause candi-\ndates are deliberately out-of-distribution, surro-\ngate rankings are least reliable exactly where the\noptimizer is most aggressive, yet existing meth-\nods provide no per-candidate statistical certificate\nthat a design meets a target threshold. We propose\nConforma",
+    "expected_image_path": null
+  },
+  {
+    "query_id": "Q10_02",
+    "query": "Find the relevant diagram or figure illustrating: '### 1. Figure Type\nComposite schematic / workflow diagram with illustrative molecular renderings and two downstream resu'",
+    "query_type": "image",
+    "expected_doc_id": "2606.14159_Curvature-Guided_Geometric_Representation_for_Protein-Ligand_Binding_Affinity_Pr",
+    "expected_chunk_type": "image",
+    "expected_answer": "### 1. Figure Type\nComposite schematic / workflow diagram with illustrative molecular renderings and two downstream result panels (scatter plot and ranked virtual screening examples).\n\n### 2. Purpose\nIllustrates how a protein\u2013ligand complex is converted into multiple molecule representations (1D, 2D, 3D), fed into a deep learning network, and applied to downstream tasks including binding affinity prediction and virtual screening.\n\n### 3. Visual Structure\n- Leftmost panel: photographic/rendered i",
+    "expected_image_path": "/home/tanisha/Downloads/Simform/POC_MULTIMODAL_MULTIAGENT_RAG/Final_code/InSightDocs/data/output/pdfs/InsightDocs/2606.14159_Curvature-Guided_Geometric_Representation_for_Protein-Ligand_Binding_Affinity_Pr/images/page_1_figure_1.png"
+  },
+  {
+    "query_id": "Q10_03",
+    "query": "What specific metrics, numerical values, or comparative results are presented in the experimental tables for 2606.14883_Understanding_Cross?",
+    "query_type": "table",
+    "expected_doc_id": "2606.14883_Understanding_Cross-Modal_Contributions_in_Continual_Vision-Language_Models__A_T",
+    "expected_chunk_type": "table",
+    "expected_answer": "### 1. Purpose\n\nThe table reports the results of an experiment comparing the performance of a model on different datasets and configurations. It evaluates the change in cross-entropy loss (\u2206 CE) and CLIP loss (\u2206 CLIP) between consecutive pairs of datasets, as well as the total change in loss (\u2206 LOSS).\n\n### 2. Table Structure\n\nThe table is organized into two row groups: one for the COCO dataset and one for the other dataset (unnamed). The columns are grouped into three categories: transition prob",
+    "expected_image_path": null
+  },
+  {
+    "query_id": "Q10_04",
+    "query": "What specific metrics, numerical values, or comparative results are presented in the experimental tables for 2606.14047_Knowledge_Graph_Enh?",
+    "query_type": "table",
+    "expected_doc_id": "2606.14047_Knowledge_Graph_Enhanced_Memory-Augmented_Retrieval_for_Long_Context_Modeling",
+    "expected_chunk_type": "table",
+    "expected_answer": "### 1. Purpose\n\nThe table reports the performance of various language models on different datasets, comparing their results across different model sizes, training parameters, and evaluation metrics.\n\n### 2. Table Structure\n\nThe table is organized into two main row groups: one for the PG19 dataset and another for the Proof-pile and WikiText-103 datasets. Each row group contains multiple rows representing different models, model sizes, and training parameters. The columns represent the model names",
+    "expected_image_path": null
+  },
+  {
+    "query_id": "Q10_05",
+    "query": "What concept or methodology is explained in relation to: 'EnvShip-Bench: An Environment-Enhanced Benchmark for'?",
+    "query_type": "text",
+    "expected_doc_id": "2606.15240_EnvShip-Bench__An_Environment-Enhanced_Benchmark_for_Short-Term_Vessel_Trajector",
+    "expected_chunk_type": "text",
+    "expected_answer": "EnvShip-Bench: An Environment-Enhanced Benchmark for\nShort-Term Vessel Trajectory Prediction\nKun Ma\nHarbin Engineering University\nHarbin, China\nPolitecnico di Torino\nTurin, Italy\nmakun@hrbeu.edu.cn\nQilong Han\nHarbin Engineering University\nHarbin, China\nhanqilong@hrbeu.edu.cn\nChengjing Song\nHarbin Engineering University\nHarbin, China\nsongchengjing@hrbeu.edu.cn\nJingzheng Yao\nHarbin Engineering University\nHarbin, China\nyaojingzheng@hrbeu.edu.cn\nHao Wang\nHarbin Engineering University\nHarbin, China\nb",
+    "expected_image_path": null
+  },
+  {
+    "query_id": "Q10_06",
+    "query": "What concept or methodology is explained in relation to: 'Where Black-box Drug-Target Interaction Prediction Models'?",
+    "query_type": "text",
+    "expected_doc_id": "2606.14245_Where_Black-box_Drug-Target_Interaction_Prediction_Models_Look__Cross-Method_Exp",
+    "expected_chunk_type": "text",
+    "expected_answer": "Where Black-box Drug-Target Interaction Prediction Models\nLook: Cross-Method Explainability\nAli Vefghia, Zahed Rahmatia,\u2217, Mohammad Akbaria\naDepartment of Mathematics and Computer Science, Amirkabir University of Technology, Tehran, Iran\nAbstract\nDrug-target interaction (DTI) and affinity (DTA) predictors increasingly achieve strong bench-\nmark scores, yet their internal use of sequence, fingerprint, and graph features often remains\nopaque. We present an interpretability audit of BridgeDPI archi",
+    "expected_image_path": null
+  },
+  {
+    "query_id": "Q10_07",
+    "query": "Find the relevant diagram or figure illustrating: '### 1. Figure Type\nDependency diagram / proof-structure flowchart (graph showing which lemmas feed into which intermedia'",
+    "query_type": "image",
+    "expected_doc_id": "2606.14095_Lyapunov-Based_Sample_Complexity_Analysis_for_Weakly-Coupled_MDPs",
+    "expected_chunk_type": "image",
+    "expected_answer": "### 1. Figure Type\nDependency diagram / proof-structure flowchart (graph showing which lemmas feed into which intermediate lemmas and ultimately into a theorem).\n\n### 2. Purpose\nIllustrates the logical dependency relationships among lemmas and a theorem: which named lemmas provide inputs to intermediate lemmas (Lemma 3 and Lemma 4), and how those intermediate lemmas jointly support Theorem 1.\n\n### 3. Visual Structure\n- Overall layout: symmetric two-column arrangement feeding into a single bottom",
+    "expected_image_path": "/home/tanisha/Downloads/Simform/POC_MULTIMODAL_MULTIAGENT_RAG/Final_code/InSightDocs/data/output/pdfs/InsightDocs/2606.14095_Lyapunov-Based_Sample_Complexity_Analysis_for_Weakly-Coupled_MDPs/images/page_18_figure_1.png"
+  },
+  {
+    "query_id": "Q10_08",
+    "query": "Find the relevant diagram or figure illustrating: '### 1. Figure Type\nSchematic diagram / conceptual mapping (two-panel diagram showing correspondence between distribution'",
+    "query_type": "image",
+    "expected_doc_id": "2606.14079_Deep_Spectral_Learning_of_Embedded_Latent_Transfer_Operators_for_Stochastic_Dyna",
+    "expected_chunk_type": "image",
+    "expected_answer": "### 1. Figure Type\nSchematic diagram / conceptual mapping (two-panel diagram showing correspondence between distribution-level dynamics and operator-level dynamics).\n\n### 2. Purpose\nTo illustrate a correspondence (an equality or reduction) between a pair of time-step dynamics expressed in terms of probability distributions and observation mappings on the left, and an analogous pair expressed in terms of \u03bc-variables and explicit operators on the right.\n\n### 3. Visual Structure\n- Two main horizont",
+    "expected_image_path": "/home/tanisha/Downloads/Simform/POC_MULTIMODAL_MULTIAGENT_RAG/Final_code/InSightDocs/data/output/pdfs/InsightDocs/2606.14079_Deep_Spectral_Learning_of_Embedded_Latent_Transfer_Operators_for_Stochastic_Dyna/images/page_4_figure_1.png"
+  },
+  {
+    "query_id": "Q10_09",
+    "query": "What specific metrics, numerical values, or comparative results are presented in the experimental tables for 2606.14533_The_Risk_Shadow_of_?",
+    "query_type": "table",
+    "expected_doc_id": "2606.14533_The_Risk_Shadow_of_Principal_Component_Analysis__When_99_9999__Variance_Preserva",
+    "expected_chunk_type": "table",
+    "expected_answer": "### 1. Purpose\n\nThe table reports a summary of key notations used throughout the paper, providing definitions for various mathematical symbols and their descriptions.\n\n### 2. Table Structure\n\nThe table consists of a single dataset with a single row group, listing various mathematical symbols and their corresponding descriptions. There are no column groups, benchmarks, evaluation metrics, methods, models, parameter settings, or experimental configurations.\n\n### 3. Detailed Table Content\n\nThe tabl",
+    "expected_image_path": null
+  },
+  {
+    "query": "What is the quantum fidelity of the 128-qubit SuperConducting Transmon processor presented in Table 12?",
+    "query_type": "out_of_scope",
+    "expected_doc_id": null,
+    "expected_chunk_type": null,
+    "expected_answer": "Information not available in retrieved context.",
+    "expected_image_path": null,
+    "query_id": "Q10_10"
+  }
+]

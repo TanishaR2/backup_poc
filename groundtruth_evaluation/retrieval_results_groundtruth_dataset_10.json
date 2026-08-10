@@ -1,0 +1,217 @@
+{
+  "summary": {
+    "total_queries": 10,
+    "evaluable_queries": 9,
+    "out_of_scope_queries": 1,
+    "mrr": 0.0,
+    "map": 0.0,
+    "hit_rate_at_1": 0.0,
+    "hit_rate_at_5": 0.0,
+    "avg_precision_at_5": 0.0,
+    "avg_recall_at_5": 0.0,
+    "avg_f1_score": 0.0,
+    "chunk_type_match_rate": 0.3333
+  },
+  "details": [
+    {
+      "query_id": "Q10_01",
+      "query": "What concept or methodology is explained in relation to: 'Conformal Candidate Certification for Offline Model-Based Optimization'?",
+      "query_type": "text",
+      "expected_doc_id": "2606.15217_Conformal_Candidate_Certification_for_Offline_Model-Based_Optimization",
+      "expected_chunk_type": "text",
+      "retrieved_doc_ids": [],
+      "retrieved_chunk_types": [
+        "text",
+        "text"
+      ],
+      "rank": 0,
+      "mrr": 0.0,
+      "hit_at_1": false,
+      "hit_at_5": false,
+      "precision_at_5": 0.0,
+      "recall_at_5": 0.0,
+      "f1_score": 0.0,
+      "chunk_type_match": true
+    },
+    {
+      "query_id": "Q10_02",
+      "query": "Find the relevant diagram or figure illustrating: '### 1. Figure Type\nComposite schematic / workflow diagram with illustrative molecular renderings and two downstream resu'",
+      "query_type": "image",
+      "expected_doc_id": "2606.14159_Curvature-Guided_Geometric_Representation_for_Protein-Ligand_Binding_Affinity_Pr",
+      "expected_chunk_type": "image",
+      "retrieved_doc_ids": [],
+      "retrieved_chunk_types": [
+        "text",
+        "text"
+      ],
+      "rank": 0,
+      "mrr": 0.0,
+      "hit_at_1": false,
+      "hit_at_5": false,
+      "precision_at_5": 0.0,
+      "recall_at_5": 0.0,
+      "f1_score": 0.0,
+      "chunk_type_match": false
+    },
+    {
+      "query_id": "Q10_03",
+      "query": "What specific metrics, numerical values, or comparative results are presented in the experimental tables for 2606.14883_Understanding_Cross?",
+      "query_type": "table",
+      "expected_doc_id": "2606.14883_Understanding_Cross-Modal_Contributions_in_Continual_Vision-Language_Models__A_T",
+      "expected_chunk_type": "table",
+      "retrieved_doc_ids": [],
+      "retrieved_chunk_types": [
+        "text",
+        "text"
+      ],
+      "rank": 0,
+      "mrr": 0.0,
+      "hit_at_1": false,
+      "hit_at_5": false,
+      "precision_at_5": 0.0,
+      "recall_at_5": 0.0,
+      "f1_score": 0.0,
+      "chunk_type_match": false
+    },
+    {
+      "query_id": "Q10_04",
+      "query": "What specific metrics, numerical values, or comparative results are presented in the experimental tables for 2606.14047_Knowledge_Graph_Enh?",
+      "query_type": "table",
+      "expected_doc_id": "2606.14047_Knowledge_Graph_Enhanced_Memory-Augmented_Retrieval_for_Long_Context_Modeling",
+      "expected_chunk_type": "table",
+      "retrieved_doc_ids": [],
+      "retrieved_chunk_types": [
+        "text",
+        "text"
+      ],
+      "rank": 0,
+      "mrr": 0.0,
+      "hit_at_1": false,
+      "hit_at_5": false,
+      "precision_at_5": 0.0,
+      "recall_at_5": 0.0,
+      "f1_score": 0.0,
+      "chunk_type_match": false
+    },
+    {
+      "query_id": "Q10_05",
+      "query": "What concept or methodology is explained in relation to: 'EnvShip-Bench: An Environment-Enhanced Benchmark for'?",
+      "query_type": "text",
+      "expected_doc_id": "2606.15240_EnvShip-Bench__An_Environment-Enhanced_Benchmark_for_Short-Term_Vessel_Trajector",
+      "expected_chunk_type": "text",
+      "retrieved_doc_ids": [],
+      "retrieved_chunk_types": [
+        "text",
+        "text"
+      ],
+      "rank": 0,
+      "mrr": 0.0,
+      "hit_at_1": false,
+      "hit_at_5": false,
+      "precision_at_5": 0.0,
+      "recall_at_5": 0.0,
+      "f1_score": 0.0,
+      "chunk_type_match": true
+    },
+    {
+      "query_id": "Q10_06",
+      "query": "What concept or methodology is explained in relation to: 'Where Black-box Drug-Target Interaction Prediction Models'?",
+      "query_type": "text",
+      "expected_doc_id": "2606.14245_Where_Black-box_Drug-Target_Interaction_Prediction_Models_Look__Cross-Method_Exp",
+      "expected_chunk_type": "text",
+      "retrieved_doc_ids": [],
+      "retrieved_chunk_types": [
+        "text",
+        "text"
+      ],
+      "rank": 0,
+      "mrr": 0.0,
+      "hit_at_1": false,
+      "hit_at_5": false,
+      "precision_at_5": 0.0,
+      "recall_at_5": 0.0,
+      "f1_score": 0.0,
+      "chunk_type_match": true
+    },
+    {
+      "query_id": "Q10_07",
+      "query": "Find the relevant diagram or figure illustrating: '### 1. Figure Type\nDependency diagram / proof-structure flowchart (graph showing which lemmas feed into which intermedia'",
+      "query_type": "image",
+      "expected_doc_id": "2606.14095_Lyapunov-Based_Sample_Complexity_Analysis_for_Weakly-Coupled_MDPs",
+      "expected_chunk_type": "image",
+      "retrieved_doc_ids": [],
+      "retrieved_chunk_types": [
+        "text",
+        "text"
+      ],
+      "rank": 0,
+      "mrr": 0.0,
+      "hit_at_1": false,
+      "hit_at_5": false,
+      "precision_at_5": 0.0,
+      "recall_at_5": 0.0,
+      "f1_score": 0.0,
+      "chunk_type_match": false
+    },
+    {
+      "query_id": "Q10_08",
+      "query": "Find the relevant diagram or figure illustrating: '### 1. Figure Type\nSchematic diagram / conceptual mapping (two-panel diagram showing correspondence between distribution'",
+      "query_type": "image",
+      "expected_doc_id": "2606.14079_Deep_Spectral_Learning_of_Embedded_Latent_Transfer_Operators_for_Stochastic_Dyna",
+      "expected_chunk_type": "image",
+      "retrieved_doc_ids": [],
+      "retrieved_chunk_types": [
+        "text",
+        "text"
+      ],
+      "rank": 0,
+      "mrr": 0.0,
+      "hit_at_1": false,
+      "hit_at_5": false,
+      "precision_at_5": 0.0,
+      "recall_at_5": 0.0,
+      "f1_score": 0.0,
+      "chunk_type_match": false
+    },
+    {
+      "query_id": "Q10_09",
+      "query": "What specific metrics, numerical values, or comparative results are presented in the experimental tables for 2606.14533_The_Risk_Shadow_of_?",
+      "query_type": "table",
+      "expected_doc_id": "2606.14533_The_Risk_Shadow_of_Principal_Component_Analysis__When_99_9999__Variance_Preserva",
+      "expected_chunk_type": "table",
+      "retrieved_doc_ids": [],
+      "retrieved_chunk_types": [
+        "text",
+        "text"
+      ],
+      "rank": 0,
+      "mrr": 0.0,
+      "hit_at_1": false,
+      "hit_at_5": false,
+      "precision_at_5": 0.0,
+      "recall_at_5": 0.0,
+      "f1_score": 0.0,
+      "chunk_type_match": false
+    },
+    {
+      "query_id": "Q10_10",
+      "query": "What is the quantum fidelity of the 128-qubit SuperConducting Transmon processor presented in Table 12?",
+      "query_type": "out_of_scope",
+      "expected_doc_id": null,
+      "expected_chunk_type": null,
+      "retrieved_doc_ids": [],
+      "retrieved_chunk_types": [
+        "text",
+        "text"
+      ],
+      "rank": 0,
+      "mrr": 1.0,
+      "hit_at_1": true,
+      "hit_at_5": true,
+      "precision_at_5": 1.0,
+      "recall_at_5": 1.0,
+      "f1_score": 1.0,
+      "chunk_type_match": false
+    }
+  ]
+}

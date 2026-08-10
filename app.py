@@ -11,7 +11,7 @@ from pathlib import Path
 
 from app.generation.query_utils import select_relevant_image_path
 from utils.settings import RETRIEVAL_CONFIDENCE_THRESHOLD, VALIDATION_CONFIDENCE_THRESHOLD
-FASTAPI_URL = os.getenv("FASTAPI_URL1", "http://127.0.0.1:8003")
+FASTAPI_URL = os.getenv("FASTAPI_URL1", "http://127.0.0.1:8004")
 
 # Auto-probe active FastAPI port (fallback to port 8000 if 8004 is unreachable)
 try:
@@ -237,9 +237,7 @@ with st.sidebar:
                         st.error(f"Ingestion failed (Code {response.status_code}): {response.text}")
                 except Exception as e:
                     st.error(f"Error connecting to backend: {e}")
-                    
-    st.markdown("---")
-    st.markdown("<h3 style='color: #c084fc; font-weight: 800; margin-bottom: 0.5rem;'>📚 Ingested Corpus</h3>", unsafe_allow_html=True)
+  
     try:
         doc_resp = requests.get(f"{FASTAPI_URL}/documents", timeout=3)
         if doc_resp.status_code == 200:

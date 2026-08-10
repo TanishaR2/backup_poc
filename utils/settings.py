@@ -56,28 +56,31 @@ VALIDATION_CONFIDENCE_THRESHOLD = 0.70
 # --- MODEL FALLBACK DICTIONARY CHAIN ---
 # Simply reorder these entries to manually control the fallback sequence!
 MODEL_FALLBACK_CHAIN = [
-    # 1. Azure OpenAI Key 1 (Primary for fast latency & high accuracy)
+    # 1. Groq Client 1 - Model 1 (Llama 3.3 70B)
+    {"name": "groq_key1_70b", "provider": "groq", "key_env": "GROQ_API_KEY", "model": "llama-3.3-70b-versatile", "supports_vision": False},
+
+    # 2. Gemini Key 1
+    {"name": "gemini_key1", "provider": "google", "key_env": "GOOGLE_API_KEY", "model": "gemini-2.5-flash", "supports_vision": True},
+    # 3. Azure OpenAI Key 1 (Primary for fast latency & high accuracy)
     {"name": "azure_openai_key_5_4", "provider": "azure_openai", "key_env": AZURE_OPENAI_5_4_KEY_ENV, "model": AZURE_OPENAI_MODEL_NAME_5_4, "supports_vision": True},
-    # 2. Azure OpenAI Key 2
+    # 4. Azure OpenAI Key 2
     {"name": "azure_openai_key_5_4_2", "provider": "azure_openai", "key_env": AZURE_OPENAI_5_4_KEY_ENV, "model": AZURE_OPENAI_MODEL_NAME_5_4, "supports_vision": True},
 
-    # 3. OpenAI Primary
+    # 5. OpenAI Primary
     {"name": "openai_key1", "provider": "openai", "key_env": "OPENAI_API_KEY", "model": "gpt-4o-mini", "supports_vision": True},
 
-    # 4. Groq Client 1 - Model 1 (Llama 3.3 70B)
-    {"name": "groq_key1_70b", "provider": "groq", "key_env": "GROQ_API_KEY", "model": "llama-3.3-70b-versatile", "supports_vision": False},
-    # 5. Groq Client 1 - Model 2 (Llama 3.1 8B)
+
+    # 6. Groq Client 1 - Model 2 (Llama 3.1 8B)
     {"name": "groq_key1_8b", "provider": "groq", "key_env": "GROQ_API_KEY", "model": "llama-3.1-8b-instant", "supports_vision": False},
 
-    # 6. Groq Client 2 - Model 1 (Llama 3.3 70B)
+    # 8. Groq Client 2 - Model 1 (Llama 3.3 70B)
     {"name": "groq_key2_70b", "provider": "groq", "key_env": "GROQ_API_KEY_2", "model": "llama-3.3-70b-versatile", "supports_vision": False},
-    # 7. Groq Client 2 - Model 2 (Llama 3.1 8B)
+    # 9. Groq Client 2 - Model 2 (Llama 3.1 8B)
     {"name": "groq_key2_8b", "provider": "groq", "key_env": "GROQ_API_KEY_2", "model": "llama-3.1-8b-instant", "supports_vision": False},
 
-    # 8. Gemini Key 1
-    {"name": "gemini_key1", "provider": "google", "key_env": "GOOGLE_API_KEY", "model": "gemini-2.5-flash", "supports_vision": True},
-    # 9. Gemini Key 2
+
+    # 10. Gemini Key 2
     {"name": "gemini_key2", "provider": "google", "key_env": "GOOGLE_API_KEY2", "model": "gemini-2.5-flash", "supports_vision": True},
-    # 10. Gemini Key 3
+    # 11. Gemini Key 3
     {"name": "gemini_key3", "provider": "google", "key_env": "GOOGLE_API_KEY3", "model": "gemini-2.5-flash", "supports_vision": True},
 ]
